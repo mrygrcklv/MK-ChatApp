@@ -200,14 +200,48 @@ privateSend.addEventListener("click", async () => {
 // ---------------- GROUP CHAT ----------------
 function loadGroupMessages() {
   const groupRef = ref(db, "groupMessages");
-  onValue(groupRef, (snapshot) => {
-    groupMessages.innerHTML = "";
-    snapshot.forEach((child) => {
-      renderGroupMessage(child.key, child.val());
-    });
+
+  // 🔥 Listener for new messages
+  onChildAdded(groupRef, (snapshot) => {
+    renderGroupMessage(snapshot.key, snapshot.val());
     groupMessages.scrollTop = groupMessages.scrollHeight;
+
+    // ✅ Mark as read kung hindi galing sa current user
+    const msg = snapshot.val();
+    if (msg.sender !== auth.currentUser.email) {
+      const readRef = ref(db, `groupMessages/${snapshot.key}/readBy/${auth.currentUser.uid}`);
+      set(readRef, true);
+    }
+  });
+
+  // 🔥 Listener for message updates (like readBy changes)
+  onChildChanged(groupRef, (snapshot) => {
+    const msgKey = snapshot.key;
+    const msgData = snapshot.val();
+
+    // Hanapin existing message element
+    const wrapper = document.getElementById("msg-" + msgKey);
+    if (wrapper) {
+      // Update status text kung sender ang current user
+      if (msgData.sender === auth.currentUser.email) {
+        const status = wrapper.querySelector(".message-status");
+        if (status) {
+          const readers = msgData.readBy ? Object.keys(msgData.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
+          if (readers.length === 0) {
+            status.textContent = "Sent";
+          } else {
+            getUserNamesByUids(readers, (names) => {
+              status.textContent =
+                names.length === 1 ? "Viewed by " + names[0] :
+                "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? ` and ${names.length - 2} others` : "");
+            });
+          }
+        }
+      }
+    }
   });
 }
+
 
 function renderGroupMessage(msgKey, msg) {
   const wrapper = document.createElement("div");
@@ -437,6 +471,7 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
 
 
 
