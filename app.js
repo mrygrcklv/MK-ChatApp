@@ -270,6 +270,24 @@ function loadGroupMessages() {
 }
 
 // ---------------- TYPING INDICATORS ----------------
+privateInput.addEventListener("input", () => {
+  const typingRef = ref(db, `privateChats/${currentChatId}/typing/${currentUser.uid}`);
+  set(typingRef, true);
+
+  clearTimeout(window.typingTimeout);
+  window.typingTimeout = setTimeout(() => {
+    set(typingRef, false);
+  }, 2000); // stop typing after 2s idle
+});
+
+// Show typing indicator if other user is typing
+onValue(ref(db, `privateChats/${currentChatId}/typing`), snapshot => {
+  const typingData = snapshot.val() || {};
+  const someoneTyping = Object.keys(typingData).some(uid => uid !== currentUser.uid && typingData[uid]);
+
+  typingIndicator.style.display = someoneTyping ? "block" : "none";
+});
+
 groupInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user) return;
@@ -405,3 +423,4 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
