@@ -192,6 +192,9 @@ privateSend.addEventListener("click", async () => {
     read: false
   });
   privateInput.value = "";
+
+  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
+  set(typingRef, false);
 });
 
 // ---------------- GROUP CHAT ----------------
@@ -270,6 +273,20 @@ function loadGroupMessages() {
 }
 
 // ---------------- TYPING INDICATORS ----------------
+privateInput.addEventListener("input", () => {
+  const user = auth.currentUser;
+  if (!user || !privateUser) return;
+
+  const chatId = getChatId(user.uid, privateUser);
+  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
+
+  if (privateInput.value.trim() !== "") {
+    set(typingRef, true);
+  } else {
+    set(typingRef, false);
+  }
+});
+
 groupInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user) return;
@@ -308,6 +325,8 @@ function loadTypingIndicators() {
 function loadPrivateChat(otherUid) {
   const chatId = getChatId(auth.currentUser.uid, otherUid);
   const chatRef = ref(db, "privateChats/" + chatId);
+
+  // Load messages
   onValue(chatRef, (snapshot) => {
     privateMessages.innerHTML = "";
     snapshot.forEach((child) => {
@@ -357,6 +376,29 @@ function loadPrivateChat(otherUid) {
     });
     privateMessages.scrollTop = privateMessages.scrollHeight;
   });
+
+  // 🔥 Typing indicator listener
+  const typingRef = ref(db, "privateTyping/" + chatId);
+  onValue(typingRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    const typingUsers = Object.keys(data).filter(
+      uid => uid !== auth.currentUser.uid && data[uid]
+    );
+
+    // Remove old indicator if any
+    const existing = privateMessages.querySelector(".typing-indicator");
+    if (existing) existing.remove();
+
+    if (typingUsers.length > 0) {
+      getUserNamesByUids(typingUsers, (names) => {
+        const indicator = document.createElement("div");
+        indicator.className = "typing-indicator";
+        indicator.textContent = names[0] + " is typing...";
+        privateMessages.appendChild(indicator);
+        privateMessages.scrollTop = privateMessages.scrollHeight;
+      });
+    }
+  });
 }
 
 // ---------------- FORMAT TIMESTAMP ----------------
@@ -405,3 +447,4 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
