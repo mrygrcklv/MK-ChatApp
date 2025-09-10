@@ -227,3 +227,21 @@ body {
   display: block;
   text-align: right;
 }
+#logout-btn {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 10px;
+  background: #fff;
+  color: #388e3c;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.3s, color 0.3s, transform 0.2s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+#logout-btn:hover {
+  background: #f1f8f4;
+  color: #2e7d32;
+  transform: translateY(-1px);
+}
+
