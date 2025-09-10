@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 
 import { 
-  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, set 
+  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, onChildChanged, set 
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
 // Firebase Config
@@ -202,75 +202,91 @@ function loadGroupMessages() {
   const groupRef = ref(db, "groupMessages");
   groupMessages.innerHTML = "";
 
+  // Add new messages
   onChildAdded(groupRef, (snapshot) => {
+    renderGroupMessage(snapshot.key, snapshot.val());
+  });
+
+  // Update read receipts in realtime
+  onChildChanged(groupRef, (snapshot) => {
     const msg = snapshot.val();
-    const msgKey = snapshot.key;
-    const wrapper = document.createElement("div");
-    wrapper.style.display = "flex";
-    wrapper.style.flexDirection = "column";
-    wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
+    const wrapper = document.getElementById("group-msg-" + snapshot.key);
+    if (!wrapper) return;
 
-    const user = auth.currentUser;
-    if (user && (!msg.readBy || !msg.readBy[user.uid])) {
-      const msgRef = ref(db, "groupMessages/" + msgKey + "/readBy");
-      update(msgRef, { [user.uid]: true });
-    }
-
-    const name = document.createElement("span");
-    getUserByEmail(msg.sender, (firstName) => {
-      name.textContent = firstName;
-    });
-    name.style.fontSize = "12px";
-    name.style.color = "#666";
-    name.style.marginBottom = "2px";
-    name.style.marginLeft = "6px";
-    name.style.marginRight = "6px";
-
-    const div = document.createElement("div");
-    div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
-    div.textContent = msg.text;
-
-    const time = document.createElement("span");
-    time.className = "message-timestamp";
-    time.textContent = formatTime(msg.ts);
-
-    wrapper.appendChild(name);
-    wrapper.appendChild(div);
-    wrapper.appendChild(time);
-
-    if (msg.sender === auth.currentUser.email) {
-      const status = document.createElement("span");
-      status.className = "message-status";
-
+    const statusEl = wrapper.querySelector(".message-status");
+    if (statusEl) {
       if (!msg.readBy) {
-        status.textContent = "Sent";
+        statusEl.textContent = "Sent";
       } else {
         const readers = Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid);
-
         if (readers.length === 0) {
-          status.textContent = "Sent";
+          statusEl.textContent = "Sent";
         } else {
           getUserNamesByUids(readers, (names) => {
             const totalUsers = userListEl.querySelectorAll("li").length;
             if (names.length === totalUsers) {
-              status.textContent = "Viewed by everyone";
+              statusEl.textContent = "Viewed by everyone";
             } else if (names.length === 1) {
-              status.textContent = "Viewed by " + names[0];
+              statusEl.textContent = "Viewed by " + names[0];
             } else if (names.length <= 3) {
-              status.textContent = "Viewed by " + names.join(", ");
+              statusEl.textContent = "Viewed by " + names.join(", ");
             } else {
-              status.textContent = "Viewed by " + names.slice(0, 2).join(", ") + " and " + (names.length - 2) + " others";
+              statusEl.textContent =
+                "Viewed by " + names.slice(0, 2).join(", ") + " and " + (names.length - 2) + " others";
             }
           });
         }
       }
-      wrapper.appendChild(status);
     }
-
-    groupMessages.appendChild(wrapper);
-    groupMessages.scrollTop = groupMessages.scrollHeight;
   });
 }
+
+function renderGroupMessage(msgId, msg) {
+  const wrapper = document.createElement("div");
+  wrapper.id = "group-msg-" + msgId;
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
+
+  const user = auth.currentUser;
+  if (user && (!msg.readBy || !msg.readBy[user.uid])) {
+    const msgRef = ref(db, "groupMessages/" + msgId + "/readBy");
+    update(msgRef, { [user.uid]: true });
+  }
+
+  const name = document.createElement("span");
+  getUserByEmail(msg.sender, (firstName) => {
+    name.textContent = firstName;
+  });
+  name.style.fontSize = "12px";
+  name.style.color = "#666";
+  name.style.marginBottom = "2px";
+  name.style.marginLeft = "6px";
+  name.style.marginRight = "6px";
+
+  const div = document.createElement("div");
+  div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
+  div.textContent = msg.text;
+
+  const time = document.createElement("span");
+  time.className = "message-timestamp";
+  time.textContent = formatTime(msg.ts);
+
+  wrapper.appendChild(name);
+  wrapper.appendChild(div);
+  wrapper.appendChild(time);
+
+  if (msg.sender === auth.currentUser.email) {
+    const status = document.createElement("span");
+    status.className = "message-status";
+    status.textContent = "Sent"; // default, auto-update later
+    wrapper.appendChild(status);
+  }
+
+  groupMessages.appendChild(wrapper);
+  groupMessages.scrollTop = groupMessages.scrollHeight;
+}
+
 
 // ---------------- TYPING INDICATORS ----------------
 privateInput.addEventListener("input", () => {
@@ -326,55 +342,23 @@ function loadPrivateChat(otherUid) {
   const chatId = getChatId(auth.currentUser.uid, otherUid);
   const chatRef = ref(db, "privateChats/" + chatId);
 
-  // Load messages
-  onValue(chatRef, (snapshot) => {
-    privateMessages.innerHTML = "";
-    snapshot.forEach((child) => {
-      const msg = child.val();
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "flex";
-      wrapper.style.flexDirection = "column";
-      wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
+  privateMessages.innerHTML = "";
 
-      const msgRef = ref(db, "privateChats/" + chatId + "/" + child.key);
-      if (msg.sender !== auth.currentUser.email && !msg.read) {
-        update(msgRef, { read: true });
+  // Listen for new messages
+  onChildAdded(chatRef, (snapshot) => {
+    renderPrivateMessage(snapshot.key, snapshot.val(), chatId);
+  });
+
+  // Listen for updates (read receipts, edits)
+  onChildChanged(chatRef, (snapshot) => {
+    const msg = snapshot.val();
+    const wrapper = document.getElementById("msg-" + snapshot.key);
+    if (wrapper) {
+      const statusEl = wrapper.querySelector(".message-status");
+      if (statusEl) {
+        statusEl.textContent = msg.read ? "Read" : "Sent";
       }
-
-      const name = document.createElement("span");
-      getUserByEmail(msg.sender, (firstName) => {
-        name.textContent = firstName;
-      });
-      name.style.fontSize = "12px";
-      name.style.color = "#666";
-      name.style.marginBottom = "2px";
-      name.style.marginLeft = "6px";
-      name.style.marginRight = "6px";
-
-      const div = document.createElement("div");
-      if (msg.sender === auth.currentUser.email) {
-        div.className = "message-bubble sender";
-      } else {
-        div.className = "message-bubble receiver";
-      }
-      div.textContent = msg.text;
-
-      const time = document.createElement("span");
-      time.className = "message-timestamp";
-      time.textContent = formatTime(msg.ts);
-
-      wrapper.appendChild(name);
-      wrapper.appendChild(div);
-      wrapper.appendChild(time);
-      if (msg.sender === auth.currentUser.email) {
-        const status = document.createElement("span");
-        status.className = "message-status";
-        status.textContent = msg.read ? "Read" : "Sent";
-        wrapper.appendChild(status);
-      }
-      privateMessages.appendChild(wrapper);
-    });
-    privateMessages.scrollTop = privateMessages.scrollHeight;
+    }
   });
 
   // 🔥 Typing indicator listener
@@ -385,7 +369,6 @@ function loadPrivateChat(otherUid) {
       uid => uid !== auth.currentUser.uid && data[uid]
     );
 
-    // Remove old indicator if any
     const existing = privateMessages.querySelector(".typing-indicator");
     if (existing) existing.remove();
 
@@ -399,6 +382,51 @@ function loadPrivateChat(otherUid) {
       });
     }
   });
+}
+
+function renderPrivateMessage(msgId, msg, chatId) {
+  const wrapper = document.createElement("div");
+  wrapper.id = "msg-" + msgId;
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
+
+  const msgRef = ref(db, "privateChats/" + chatId + "/" + msgId);
+  if (msg.sender !== auth.currentUser.email && !msg.read) {
+    update(msgRef, { read: true });
+  }
+
+  const name = document.createElement("span");
+  getUserByEmail(msg.sender, (firstName) => {
+    name.textContent = firstName;
+  });
+  name.style.fontSize = "12px";
+  name.style.color = "#666";
+  name.style.marginBottom = "2px";
+  name.style.marginLeft = "6px";
+  name.style.marginRight = "6px";
+
+  const div = document.createElement("div");
+  div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
+  div.textContent = msg.text;
+
+  const time = document.createElement("span");
+  time.className = "message-timestamp";
+  time.textContent = formatTime(msg.ts);
+
+  wrapper.appendChild(name);
+  wrapper.appendChild(div);
+  wrapper.appendChild(time);
+
+  if (msg.sender === auth.currentUser.email) {
+    const status = document.createElement("span");
+    status.className = "message-status";
+    status.textContent = msg.read ? "Read" : "Sent";
+    wrapper.appendChild(status);
+  }
+
+  privateMessages.appendChild(wrapper);
+  privateMessages.scrollTop = privateMessages.scrollHeight;
 }
 
 // ---------------- FORMAT TIMESTAMP ----------------
