@@ -48,6 +48,7 @@
               <div id="private-messages" class="messages" style="flex:1;"></div>
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="private-input" placeholder="Type private message...">
+                <input type="file" id="private-file" accept="image/*" style="flex:1;">
                 <button id="private-send">Send</button>
               </div>
             </div>
@@ -61,6 +62,7 @@
               <div id="typing-indicator" style="font-size:12px; color:#666; margin:5px;"></div>
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="group-input" placeholder="Type group message...">
+                <input type="file" id="group-file" accept="image/*" style="flex:1;">
                 <button id="group-send">Send</button>
               </div>
             </div>
@@ -73,3 +75,4 @@
   <script type="module" src="app.js"></script>
 </body>
 </html>
+
