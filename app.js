@@ -200,36 +200,21 @@ privateSend.addEventListener("click", async () => {
 // ---------------- GROUP CHAT ----------------
 function loadGroupMessages() {
   const groupRef = ref(db, "groupMessages");
-  groupMessages.innerHTML = "";
-
-  // For new messages
-  onChildAdded(groupRef, (snapshot) => {
-    renderGroupMessage(snapshot.key, snapshot.val());
-  });
-
-  // For updates (like readBy changes)
-  onChildChanged(groupRef, (snapshot) => {
-    renderGroupMessage(snapshot.key, snapshot.val(), true);
+  onValue(groupRef, (snapshot) => {
+    groupMessages.innerHTML = "";
+    snapshot.forEach((child) => {
+      renderGroupMessage(child.key, child.val());
+    });
+    groupMessages.scrollTop = groupMessages.scrollHeight;
   });
 }
 
-function renderGroupMessage(msgKey, msg, isUpdate = false) {
-  let wrapper = document.getElementById("msg-" + msgKey);
-
-  if (!wrapper) {
-    // Create new message element
-    wrapper = document.createElement("div");
-    wrapper.id = "msg-" + msgKey;
-    wrapper.style.display = "flex";
-    wrapper.style.flexDirection = "column";
-    wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
-    groupMessages.appendChild(wrapper);
-  } else if (!isUpdate) {
-    // If duplicate from onChildAdded, skip
-    return;
-  }
-
-  wrapper.innerHTML = "";
+function renderGroupMessage(msgKey, msg) {
+  const wrapper = document.createElement("div");
+  wrapper.id = "msg-" + msgKey;
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
 
   const name = document.createElement("span");
   getUserByEmail(msg.sender, (firstName) => {
@@ -272,8 +257,9 @@ function renderGroupMessage(msgKey, msg, isUpdate = false) {
     wrapper.appendChild(status);
   }
 
-  groupMessages.scrollTop = groupMessages.scrollHeight;
+  groupMessages.appendChild(wrapper);
 }
+
 
 
 // ---------------- TYPING INDICATORS ----------------
@@ -451,6 +437,7 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
 
 
 
