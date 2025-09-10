@@ -15,6 +15,11 @@
         ".read": "auth != null",
         ".write": "auth != null"
       }
+    },
+    "groupTyping": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
+
 }
