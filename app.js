@@ -1,3 +1,4 @@
+
 // Firebase SDK imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { 
@@ -6,20 +7,20 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 
 import { 
-  getDatabase, ref, push, update, onValue, onChildAdded, onChildChanged, set, off, get
+  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, onChildChanged, set 
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
-// Firebase Config (keep your config)
+// Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
-  authDomain: "chatapp-1754e.firebaseapp.com",
-  databaseURL: "https://chatapp-1754e-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "chatapp-1754e",
-  storageBucket: "chatapp-1754e.firebasestorage.app",
-  messagingSenderId: "40067617299",
-  appId: "1:40067617299:web:7b23a059a1832cb7d765e6",
-  measurementId: "G-LR82HTGTV1"
-};
+    apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
+    authDomain: "chatapp-1754e.firebaseapp.com",
+    databaseURL: "https://chatapp-1754e-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "chatapp-1754e",
+    storageBucket: "chatapp-1754e.firebasestorage.app",
+    messagingSenderId: "40067617299",
+    appId: "1:40067617299:web:7b23a059a1832cb7d765e6",
+    measurementId: "G-LR82HTGTV1"
+  };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -48,16 +49,6 @@ const typingIndicator = document.getElementById("typing-indicator");
 
 let privateUser = null;
 
-// --- Caches & listener refs (to avoid duplicates) ---
-const usersCache = {}; // { uid: { email, fullName, online } }
-let usersRef = ref(db, "users");
-let groupRef = ref(db, "groupMessages");
-let groupTypingRef = ref(db, "groupTyping");
-let currentChatRef = null;
-let currentPrivateTypingRef = null;
-let groupChildAddedListener = null;
-let groupChildChangedListener = null;
-
 // ---------------- SIGNUP ----------------
 signupBtn.addEventListener("click", async () => {
   try {
@@ -71,9 +62,9 @@ signupBtn.addEventListener("click", async () => {
       email: cred.user.email,
       fullName: fullName,
       online: true,
-      lastSeen: Date.now()
+      lastSeen: serverTimestamp()
     });
-    loadUsers(); // refresh cache
+    loadUsers();
   } catch (err) {
     alert(err.message);
     console.error("Signup error:", err);
@@ -87,7 +78,7 @@ loginBtn.addEventListener("click", async () => {
     await update(ref(db, "users/" + cred.user.uid), {
       email: cred.user.email,
       online: true,
-      lastSeen: Date.now()
+      lastSeen: serverTimestamp()
     });
     loadUsers();
   } catch (err) {
@@ -100,96 +91,72 @@ loginBtn.addEventListener("click", async () => {
 logoutBtn.addEventListener("click", async () => {
   const user = auth.currentUser;
   if (user) {
-    await update(ref(db, "users/" + user.uid), { online: false, lastSeen: Date.now() });
+    await update(ref(db, "users/" + user.uid), { online: false, lastSeen: serverTimestamp() });
   }
   signOut(auth);
 });
 
 // ---------------- AUTH STATE ----------------
 onAuthStateChanged(auth, (user) => {
-  cleanupAllListeners();
   if (user) {
     authSection.style.display = "none";
     chatSection.style.display = "block";
-
     const userRef = ref(db, "users/" + user.uid);
-    // listen once for display name
-    get(userRef).then(snapshot => {
+    onValue(userRef, (snapshot) => {
       const userData = snapshot.val();
-      if (userData && userData.fullName) userEmail.textContent = getFirstName(userData.fullName);
-      else userEmail.textContent = user.email;
-    }).catch(console.error);
-
+      if (userData && userData.fullName) {
+        userEmail.textContent = getFirstName(userData.fullName);
+      } else {
+        userEmail.textContent = user.email;
+      }
+    });
     update(ref(db, "users/" + user.uid), {
       email: user.email,
       online: true,
-      lastSeen: Date.now()
-    }).then(() => {
-      loadUsers();
-    });
+      lastSeen: serverTimestamp()
+    }).then(() => loadUsers());
 
-    attachGroupListeners();
+    loadGroupMessages();
     loadTypingIndicators();
   } else {
     authSection.style.display = "block";
     chatSection.style.display = "none";
     userListEl.innerHTML = "";
-    privateMessages.innerHTML = "";
-    groupMessages.innerHTML = "";
-    typingIndicator.textContent = "";
   }
 });
 
-// ---------------- LOAD USERS (with cache & single listener) ----------------
+// ---------------- LOAD USERS ----------------
 function loadUsers() {
-  // detach previous users listener to avoid duplication
-  try { off(usersRef); } catch (e) {}
-
-  // Keep cache up-to-date and render user list
+  const usersRef = ref(db, "users");
   onValue(usersRef, (snapshot) => {
-    usersCacheClearAndPopulate(snapshot);
-    renderUserList();
+    userListEl.innerHTML = "";
+    let foundOtherUsers = false;
+    snapshot.forEach((child) => {
+      const user = child.val();
+      const uid = child.key;
+      if (!user.email || uid === auth.currentUser?.uid) return;
+      foundOtherUsers = true;
+      const li = document.createElement("li");
+      li.textContent = `${getFirstName(user.fullName || user.email)} ${user.online ? "(online)" : "(offline)"}`;
+      li.classList.add(user.online ? "online" : "offline");
+      li.addEventListener("click", () => {
+        privateUser = uid;
+        chattingWith.textContent = getFirstName(user.fullName || user.email);
+        privateMessages.innerHTML = "";
+        loadPrivateChat(uid);
+      });
+      userListEl.appendChild(li);
+    });
+    if (!foundOtherUsers) {
+      const li = document.createElement("li");
+      li.textContent = "No other users found.";
+      li.classList.add("offline");
+      userListEl.appendChild(li);
+    }
   }, (error) => {
     console.error("Error loading users:", error);
     userListEl.innerHTML = "<li>Error loading users.</li>";
   });
-}
-
-function usersCacheClearAndPopulate(snapshot) {
-  // clear cache
-  for (const k in usersCache) delete usersCache[k];
-  snapshot.forEach(child => {
-    usersCache[child.key] = child.val();
-  });
-}
-
-function renderUserList() {
-  userListEl.innerHTML = "";
-  const myUid = auth.currentUser?.uid;
-  let foundOtherUsers = false;
-
-  Object.keys(usersCache).forEach(uid => {
-    const user = usersCache[uid];
-    if (!user || !user.email || uid === myUid) return;
-    foundOtherUsers = true;
-    const li = document.createElement("li");
-    li.textContent = `${getFirstName(user.fullName || user.email)} ${user.online ? "(online)" : "(offline)"}`;
-    li.classList.add(user.online ? "online" : "offline");
-    li.addEventListener("click", () => {
-      privateUser = uid;
-      chattingWith.textContent = getFirstName(user.fullName || user.email);
-      privateMessages.innerHTML = "";
-      loadPrivateChat(uid);
-    });
-    userListEl.appendChild(li);
-  });
-
-  if (!foundOtherUsers) {
-    const li = document.createElement("li");
-    li.textContent = "No other users found.";
-    li.classList.add("offline");
-    userListEl.appendChild(li);
-  }
 }
 
 // ---------------- SEND GROUP MESSAGE ----------------
@@ -199,17 +166,16 @@ groupSend.addEventListener("click", async () => {
   const user = auth.currentUser;
   if (!user) return;
 
-  const newMsgRef = push(ref(db, "groupMessages"));
-  await update(newMsgRef, {
-    senderUid: user.uid,
+  await push(ref(db, "groupMessages"), {
     sender: user.email,
     text: text,
-    ts: Date.now()
+    ts: Date.now(),
+    readBy: {}
   });
   groupInput.value = "";
 
-  // mark typing false
-  await update(ref(db, "groupTyping/" + user.uid), { [user.uid]: false }); // safe no overwrite
+  const typingRef = ref(db, "groupTyping/" + user.uid);
+  set(typingRef, false);
 });
 
 // ---------------- SEND PRIVATE MESSAGE ----------------
@@ -220,9 +186,7 @@ privateSend.addEventListener("click", async () => {
   if (!user) return;
 
   const chatId = getChatId(user.uid, privateUser);
-  const newRef = push(ref(db, "privateChats/" + chatId));
-  await update(newRef, {
-    senderUid: user.uid,
+  await push(ref(db, "privateChats/" + chatId), {
     sender: user.email,
     text: text,
     ts: Date.now(),
@@ -230,59 +194,57 @@ privateSend.addEventListener("click", async () => {
   });
   privateInput.value = "";
 
-  // mark typing false for private
-  await update(ref(db, "privateTyping/" + chatId + "/" + user.uid), { [user.uid]: false });
+  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
+  set(typingRef, false);
 });
 
-// ---------------- GROUP CHAT (attach listeners safely) ----------------
-function attachGroupListeners() {
-  // detach previous group listeners (if any)
-  try {
-    if (groupChildAddedListener) off(groupRef, "child_added", groupChildAddedListener);
-    if (groupChildChangedListener) off(groupRef, "child_changed", groupChildChangedListener);
-  } catch (e) {}
+// ---------------- GROUP CHAT ----------------
+function loadGroupMessages() {
+  const groupRef = ref(db, "groupMessages");
 
-  // child_added
-  groupChildAddedListener = onChildAdded(groupRef, (snapshot) => {
+  // 🔥 Listener for new messages
+  onChildAdded(groupRef, (snapshot) => {
     renderGroupMessage(snapshot.key, snapshot.val());
     groupMessages.scrollTop = groupMessages.scrollHeight;
 
+    // ✅ Mark as read kung hindi galing sa current user
     const msg = snapshot.val();
-    // mark as read (merge)
-    if (msg && msg.senderUid !== auth.currentUser.uid) {
-      const readByRef = ref(db, `groupMessages/${snapshot.key}/readBy`);
-      update(readByRef, { [auth.currentUser.uid]: true }).catch(console.error);
+    if (msg.sender !== auth.currentUser.email) {
+      const readRef = ref(db, `groupMessages/${snapshot.key}/readBy/${auth.currentUser.uid}`);
+      set(readRef, true);
     }
   });
 
-  // child_changed - to capture readBy updates
-  groupChildChangedListener = onChildChanged(groupRef, (snapshot) => {
+  // 🔥 Listener for message updates (like readBy changes)
+  onChildChanged(groupRef, (snapshot) => {
     const msgKey = snapshot.key;
     const msgData = snapshot.val();
 
+    // Hanapin existing message element
     const wrapper = document.getElementById("msg-" + msgKey);
-    if (wrapper && msgData && msgData.senderUid === auth.currentUser.uid) {
-      const status = wrapper.querySelector(".message-status");
-      if (status) {
-        const readers = msgData.readBy ? Object.keys(msgData.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
-        if (readers.length === 0) {
-          status.textContent = "Sent";
-        } else {
-          getUserNamesByUids(readers, (names) => {
-            status.textContent =
-              names.length === 1 ? "Viewed by " + names[0] :
-              "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? ` and ${names.length - 2} others` : "");
-          });
+    if (wrapper) {
+      // Update status text kung sender ang current user
+      if (msgData.sender === auth.currentUser.email) {
+        const status = wrapper.querySelector(".message-status");
+        if (status) {
+          const readers = msgData.readBy ? Object.keys(msgData.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
+          if (readers.length === 0) {
+            status.textContent = "Sent";
+          } else {
+            getUserNamesByUids(readers, (names) => {
+              status.textContent =
+                names.length === 1 ? "Viewed by " + names[0] :
+                "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? ` and ${names.length - 2} others` : "");
+            });
+          }
         }
       }
     }
   });
 }
 
-function renderGroupMessage(msgKey, msg) {
-  // prevent duplicate render if already exists
-  if (document.getElementById("msg-" + msgKey)) return;
 
+function renderGroupMessage(msgKey, msg) {
   const wrapper = document.createElement("div");
   wrapper.id = "msg-" + msgKey;
   wrapper.style.display = "flex";
@@ -290,12 +252,9 @@ function renderGroupMessage(msgKey, msg) {
   wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
 
   const name = document.createElement("span");
-  const senderUid = msg.senderUid;
-  if (senderUid && usersCache[senderUid]) {
-    name.textContent = getFirstName(usersCache[senderUid].fullName || usersCache[senderUid].email);
-  } else {
-    name.textContent = getFirstName(msg.sender || "Unknown");
-  }
+  getUserByEmail(msg.sender, (firstName) => {
+    name.textContent = firstName;
+  });
   name.style.fontSize = "12px";
   name.style.color = "#666";
   name.style.margin = "2px 6px";
@@ -312,7 +271,7 @@ function renderGroupMessage(msgKey, msg) {
   wrapper.appendChild(div);
   wrapper.appendChild(time);
 
-  if (msg.senderUid === auth.currentUser.uid) {
+  if (msg.sender === auth.currentUser.email) {
     const status = document.createElement("span");
     status.className = "message-status";
 
@@ -336,178 +295,142 @@ function renderGroupMessage(msgKey, msg) {
   groupMessages.appendChild(wrapper);
 }
 
+
+
 // ---------------- TYPING INDICATORS ----------------
-// private typing
 privateInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user || !privateUser) return;
 
   const chatId = getChatId(user.uid, privateUser);
-  const typingPathRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
+  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
 
-  // set as true/false via update to avoid overwriting siblings
   if (privateInput.value.trim() !== "") {
-    update(typingPathRef, { [user.uid]: true }).catch(console.error);
+    set(typingRef, true);
   } else {
-    update(typingPathRef, { [user.uid]: false }).catch(console.error);
+    set(typingRef, false);
   }
 });
 
-// group typing
 groupInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user) return;
-  const typingPathRef = ref(db, "groupTyping/" + user.uid);
+  const typingRef = ref(db, "groupTyping/" + user.uid);
   if (groupInput.value.trim() !== "") {
-    update(typingPathRef, { [user.uid]: true }).catch(console.error);
+    set(typingRef, true);
   } else {
-    update(typingPathRef, { [user.uid]: false }).catch(console.error);
+    set(typingRef, false);
   }
 });
 
 function loadTypingIndicators() {
-  try { off(groupTypingRef); } catch (e) {}
-
-  onValue(groupTypingRef, (snapshot) => {
+  const typingRef = ref(db, "groupTyping");
+  onValue(typingRef, (snapshot) => {
     const data = snapshot.val() || {};
     const typingUsers = [];
-    // Use usersCache for names to avoid additional listeners
+
     Object.keys(data).forEach(uid => {
-      // value can be boolean or nested object; check truthiness
-      const val = data[uid];
-      if (uid !== auth.currentUser?.uid && val) {
-        const name = usersCache[uid] ? getFirstName(usersCache[uid].fullName || usersCache[uid].email) : uid;
-        typingUsers.push(name);
+      if (uid !== auth.currentUser?.uid && data[uid]) {
+        getUserNamesByUids([uid], (names) => {
+          if (names.length > 0) {
+            typingUsers.push(names[0]);
+            typingIndicator.textContent = typingUsers.join(", ") + (typingUsers.length > 1 ? " are typing..." : " is typing...");
+          }
+        });
       }
     });
 
     if (typingUsers.length === 0) {
       typingIndicator.textContent = "";
-    } else {
-      typingIndicator.textContent = typingUsers.join(", ") + (typingUsers.length > 1 ? " are typing..." : " is typing...");
     }
   });
 }
 
 // ---------------- PRIVATE CHAT ----------------
 function loadPrivateChat(otherUid) {
-  // cleanup previous chat listeners
-  if (currentChatRef) {
-    try { off(currentChatRef); } catch (e) {}
-  }
   const chatId = getChatId(auth.currentUser.uid, otherUid);
-  currentChatRef = ref(db, "privateChats/" + chatId);
+  const chatRef = ref(db, "privateChats/" + chatId);
 
-  // Use child_added & child_changed for incremental real-time updates
-  // clear UI
-  privateMessages.innerHTML = "";
+  // Load messages
+  onValue(chatRef, (snapshot) => {
+    privateMessages.innerHTML = "";
+    snapshot.forEach((child) => {
+      const msg = child.val();
+      const wrapper = document.createElement("div");
+      wrapper.style.display = "flex";
+      wrapper.style.flexDirection = "column";
+      wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
 
-  // child_added - render new message
-  onChildAdded(currentChatRef, (child) => {
-    const msg = child.val();
-    renderPrivateMessage(chatId, child.key, msg);
-    privateMessages.scrollTop = privateMessages.scrollHeight;
-
-    // if incoming and unread -> mark read
-    if (msg.senderUid !== auth.currentUser.uid && !msg.read) {
-      const msgRef = ref(db, `privateChats/${chatId}/${child.key}`);
-      update(msgRef, { read: true }).catch(console.error);
-    }
-  });
-
-  // child_changed - update read status or edits
-  onChildChanged(currentChatRef, (child) => {
-    const msgKey = child.key;
-    const msgData = child.val();
-    // find message element and update status
-    const wrappers = privateMessages.querySelectorAll(".message-wrapper");
-    wrappers.forEach(w => {
-      if (w.dataset.msgKey === msgKey) {
-        const statusEl = w.querySelector(".message-status");
-        if (statusEl) statusEl.textContent = msgData.read ? "Read" : "Sent";
+      const msgRef = ref(db, "privateChats/" + chatId + "/" + child.key);
+      if (msg.sender !== auth.currentUser.email && !msg.read) {
+        update(msgRef, { read: true });
       }
+
+      const name = document.createElement("span");
+      getUserByEmail(msg.sender, (firstName) => {
+        name.textContent = firstName;
+      });
+      name.style.fontSize = "12px";
+      name.style.color = "#666";
+      name.style.marginBottom = "2px";
+      name.style.marginLeft = "6px";
+      name.style.marginRight = "6px";
+
+      const div = document.createElement("div");
+      if (msg.sender === auth.currentUser.email) {
+        div.className = "message-bubble sender";
+      } else {
+        div.className = "message-bubble receiver";
+      }
+      div.textContent = msg.text;
+
+      const time = document.createElement("span");
+      time.className = "message-timestamp";
+      time.textContent = formatTime(msg.ts);
+
+      wrapper.appendChild(name);
+      wrapper.appendChild(div);
+      wrapper.appendChild(time);
+      if (msg.sender === auth.currentUser.email) {
+        const status = document.createElement("span");
+        status.className = "message-status";
+        status.textContent = msg.read ? "Read" : "Sent";
+        wrapper.appendChild(status);
+      }
+      privateMessages.appendChild(wrapper);
     });
+    privateMessages.scrollTop = privateMessages.scrollHeight;
   });
 
-  // typing indicator for private chat
-  if (currentPrivateTypingRef) {
-    try { off(currentPrivateTypingRef); } catch (e) {}
-  }
-  currentPrivateTypingRef = ref(db, "privateTyping/" + chatId);
-  onValue(currentPrivateTypingRef, (snapshot) => {
+  // 🔥 Typing indicator listener
+  const typingRef = ref(db, "privateTyping/" + chatId);
+  onValue(typingRef, (snapshot) => {
     const data = snapshot.val() || {};
-    const typingUsers = Object.keys(data).filter(uid => uid !== auth.currentUser.uid && data[uid]);
-    // remove old indicator if any
+    const typingUsers = Object.keys(data).filter(
+      uid => uid !== auth.currentUser.uid && data[uid]
+    );
+
+    // Remove old indicator if any
     const existing = privateMessages.querySelector(".typing-indicator");
     if (existing) existing.remove();
 
     if (typingUsers.length > 0) {
-      const names = typingUsers.map(uid => usersCache[uid] ? getFirstName(usersCache[uid].fullName || usersCache[uid].email) : uid);
-      const indicator = document.createElement("div");
-      indicator.className = "typing-indicator";
-      indicator.textContent = names[0] + (names.length > 1 ? ` and ${names.length - 1} others are typing...` : " is typing...");
-      privateMessages.appendChild(indicator);
-      privateMessages.scrollTop = privateMessages.scrollHeight;
+      getUserNamesByUids(typingUsers, (names) => {
+        const indicator = document.createElement("div");
+        indicator.className = "typing-indicator";
+        indicator.textContent = names[0] + " is typing...";
+        privateMessages.appendChild(indicator);
+        privateMessages.scrollTop = privateMessages.scrollHeight;
+      });
     }
   });
-}
-
-function renderPrivateMessage(chatId, msgKey, msg) {
-  // Avoid duplicate render
-  if (privateMessages.querySelector(`[data-msg-key="${msgKey}"]`)) return;
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper";
-  wrapper.dataset.msgKey = msgKey;
-  wrapper.style.display = "flex";
-  wrapper.style.flexDirection = "column";
-  wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
-
-  const name = document.createElement("span");
-  const senderUid = msg.senderUid;
-  if (senderUid && usersCache[senderUid]) {
-    name.textContent = getFirstName(usersCache[senderUid].fullName || usersCache[senderUid].email);
-  } else {
-    name.textContent = getFirstName(msg.sender || "Unknown");
-  }
-  name.style.fontSize = "12px";
-  name.style.color = "#666";
-  name.style.marginBottom = "2px";
-  name.style.marginLeft = "6px";
-  name.style.marginRight = "6px";
-
-  const div = document.createElement("div");
-  div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
-  div.textContent = msg.text;
-
-  const time = document.createElement("span");
-  time.className = "message-timestamp";
-  time.textContent = formatTime(msg.ts);
-
-  wrapper.appendChild(name);
-  wrapper.appendChild(div);
-  wrapper.appendChild(time);
-
-  if (msg.sender === auth.currentUser.email) {
-    const status = document.createElement("span");
-    status.className = "message-status";
-    status.textContent = msg.read ? "Read" : "Sent";
-    wrapper.appendChild(status);
-  }
-
-  privateMessages.appendChild(wrapper);
 }
 
 // ---------------- FORMAT TIMESTAMP ----------------
 function formatTime(ts) {
   if (!ts) return "";
-  try {
-    const date = new Date(Number(ts));
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return "";
-  }
+  const date = new Date(ts);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 // Helper for consistent chat IDs
@@ -522,48 +445,30 @@ function getFirstName(str) {
   return str.split(" ")[0];
 }
 
-// Helper: get user by email but now uses cache (faster)
+// Helper: Find user by email and get first name (async)
 function getUserByEmail(email, callback) {
-  let firstName = email.split("@")[0];
-  for (const uid in usersCache) {
-    const u = usersCache[uid];
-    if (u && u.email === email) {
-      firstName = getFirstName(u.fullName || u.email);
-      break;
-    }
-  }
-  callback(firstName);
+  const usersRef = ref(db, "users");
+  onValue(usersRef, (snapshot) => {
+    let firstName = email.split("@")[0];
+    snapshot.forEach((child) => {
+      const user = child.val();
+      if (user.email === email && user.fullName) {
+        firstName = getFirstName(user.fullName);
+      }
+    });
+    callback(firstName);
+  }, { onlyOnce: true });
 }
 
 function getUserNamesByUids(uids, callback) {
-  const names = [];
-  uids.forEach(uid => {
-    if (usersCache[uid]) names.push(getFirstName(usersCache[uid].fullName || usersCache[uid].email));
-  });
-  callback(names);
+  const usersRef = ref(db, "users");
+  onValue(usersRef, (snapshot) => {
+    const names = [];
+    snapshot.forEach((child) => {
+      if (uids.includes(child.key)) {
+        names.push(getFirstName(child.val().fullName || child.val().email));
+      }
+    });
+    callback(names);
+  }, { onlyOnce: true });
 }
-
-// ---------------- Cleanup helpers ----------------
-function cleanupAllListeners() {
-  try {
-    off(usersRef);
-  } catch (e) {}
-  try {
-    if (groupChildAddedListener) off(groupRef, "child_added", groupChildAddedListener);
-    if (groupChildChangedListener) off(groupRef, "child_changed", groupChildChangedListener);
-    off(groupTypingRef);
-  } catch (e) {}
-  try {
-    if (currentChatRef) off(currentChatRef);
-    if (currentPrivateTypingRef) off(currentPrivateTypingRef);
-  } catch (e) {}
-}
-
-// call this before unloading page to mark offline
-window.addEventListener("beforeunload", async () => {
-  const user = auth.currentUser;
-  if (user) {
-    await update(ref(db, "users/" + user.uid), { online: false, lastSeen: Date.now() }).catch(() => {});
-  }
-  cleanupAllListeners();
-});
