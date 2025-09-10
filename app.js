@@ -270,7 +270,6 @@ function loadGroupMessages() {
 }
 
 // ---------------- TYPING INDICATORS ----------------
-
 groupInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user) return;
@@ -406,5 +405,3 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
-
-
