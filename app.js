@@ -198,8 +198,6 @@ privateSend.addEventListener("click", async () => {
 });
 
 // ---------------- GROUP CHAT ----------------
-import { onChildAdded, onChildChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-
 function loadGroupMessages() {
   const groupRef = ref(db, "groupMessages");
   groupMessages.innerHTML = "";
@@ -453,5 +451,6 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
 
 
