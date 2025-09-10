@@ -1,4 +1,3 @@
-
 // Firebase SDK imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { 
@@ -7,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 
 import { 
-  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, onChildChanged, set 
+  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, set 
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
 // Firebase Config
@@ -201,101 +200,77 @@ privateSend.addEventListener("click", async () => {
 // ---------------- GROUP CHAT ----------------
 function loadGroupMessages() {
   const groupRef = ref(db, "groupMessages");
+  groupMessages.innerHTML = "";
 
-  // 🔥 Listener for new messages
   onChildAdded(groupRef, (snapshot) => {
-    renderGroupMessage(snapshot.key, snapshot.val());
-    groupMessages.scrollTop = groupMessages.scrollHeight;
-
-    // ✅ Mark as read kung hindi galing sa current user
     const msg = snapshot.val();
-    if (msg.sender !== auth.currentUser.email) {
-      const readRef = ref(db, `groupMessages/${snapshot.key}/readBy/${auth.currentUser.uid}`);
-      set(readRef, true);
-    }
-  });
-
-  // 🔥 Listener for message updates (like readBy changes)
-  onChildChanged(groupRef, (snapshot) => {
     const msgKey = snapshot.key;
-    const msgData = snapshot.val();
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.flexDirection = "column";
+    wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
 
-    // Hanapin existing message element
-    const wrapper = document.getElementById("msg-" + msgKey);
-    if (wrapper) {
-      // Update status text kung sender ang current user
-      if (msgData.sender === auth.currentUser.email) {
-        const status = wrapper.querySelector(".message-status");
-        if (status) {
-          const readers = msgData.readBy ? Object.keys(msgData.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
-          if (readers.length === 0) {
-            status.textContent = "Sent";
-          } else {
-            getUserNamesByUids(readers, (names) => {
-              status.textContent =
-                names.length === 1 ? "Viewed by " + names[0] :
-                "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? ` and ${names.length - 2} others` : "");
-            });
-          }
-        }
-      }
+    const user = auth.currentUser;
+    if (user && (!msg.readBy || !msg.readBy[user.uid])) {
+      const msgRef = ref(db, "groupMessages/" + msgKey + "/readBy");
+      update(msgRef, { [user.uid]: true });
     }
-  });
-}
 
+    const name = document.createElement("span");
+    getUserByEmail(msg.sender, (firstName) => {
+      name.textContent = firstName;
+    });
+    name.style.fontSize = "12px";
+    name.style.color = "#666";
+    name.style.marginBottom = "2px";
+    name.style.marginLeft = "6px";
+    name.style.marginRight = "6px";
 
-function renderGroupMessage(msgKey, msg) {
-  const wrapper = document.createElement("div");
-  wrapper.id = "msg-" + msgKey;
-  wrapper.style.display = "flex";
-  wrapper.style.flexDirection = "column";
-  wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
+    const div = document.createElement("div");
+    div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
+    div.textContent = msg.text;
 
-  const name = document.createElement("span");
-  getUserByEmail(msg.sender, (firstName) => {
-    name.textContent = firstName;
-  });
-  name.style.fontSize = "12px";
-  name.style.color = "#666";
-  name.style.margin = "2px 6px";
+    const time = document.createElement("span");
+    time.className = "message-timestamp";
+    time.textContent = formatTime(msg.ts);
 
-  const div = document.createElement("div");
-  div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
-  div.textContent = msg.text;
+    wrapper.appendChild(name);
+    wrapper.appendChild(div);
+    wrapper.appendChild(time);
 
-  const time = document.createElement("span");
-  time.className = "message-timestamp";
-  time.textContent = formatTime(msg.ts);
+    if (msg.sender === auth.currentUser.email) {
+      const status = document.createElement("span");
+      status.className = "message-status";
 
-  wrapper.appendChild(name);
-  wrapper.appendChild(div);
-  wrapper.appendChild(time);
-
-  if (msg.sender === auth.currentUser.email) {
-    const status = document.createElement("span");
-    status.className = "message-status";
-
-    if (!msg.readBy) {
-      status.textContent = "Sent";
-    } else {
-      const readers = Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid);
-      if (readers.length === 0) {
+      if (!msg.readBy) {
         status.textContent = "Sent";
       } else {
-        getUserNamesByUids(readers, (names) => {
-          status.textContent =
-            names.length === 1 ? "Viewed by " + names[0] :
-            "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? ` and ${names.length - 2} others` : "");
-        });
+        const readers = Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid);
+
+        if (readers.length === 0) {
+          status.textContent = "Sent";
+        } else {
+          getUserNamesByUids(readers, (names) => {
+            const totalUsers = userListEl.querySelectorAll("li").length;
+            if (names.length === totalUsers) {
+              status.textContent = "Viewed by everyone";
+            } else if (names.length === 1) {
+              status.textContent = "Viewed by " + names[0];
+            } else if (names.length <= 3) {
+              status.textContent = "Viewed by " + names.join(", ");
+            } else {
+              status.textContent = "Viewed by " + names.slice(0, 2).join(", ") + " and " + (names.length - 2) + " others";
+            }
+          });
+        }
       }
+      wrapper.appendChild(status);
     }
-    wrapper.appendChild(status);
-  }
 
-  groupMessages.appendChild(wrapper);
+    groupMessages.appendChild(wrapper);
+    groupMessages.scrollTop = groupMessages.scrollHeight;
+  });
 }
-
-
 
 // ---------------- TYPING INDICATORS ----------------
 privateInput.addEventListener("input", () => {
@@ -472,3 +447,4 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
