@@ -302,22 +302,23 @@ function loadTypingIndicators() {
   const typingRef = ref(db, "groupTyping");
   onValue(typingRef, (snapshot) => {
     const data = snapshot.val() || {};
-    const typingUsers = [];
-
-    Object.keys(data).forEach(uid => {
-      if (uid !== auth.currentUser?.uid && data[uid]) {
-        getUserNamesByUids([uid], (names) => {
-          if (names.length > 0) {
-            typingUsers.push(names[0]);
-            typingIndicator.textContent = typingUsers.join(", ") + (typingUsers.length > 1 ? " are typing..." : " is typing...");
-          }
-        });
-      }
-    });
+    const typingUsers = Object.keys(data).filter(
+      uid => uid !== auth.currentUser?.uid && data[uid]
+    );
 
     if (typingUsers.length === 0) {
       typingIndicator.textContent = "";
+      return;
     }
+
+    getUserNamesByUids(typingUsers, (names) => {
+      if (names.length > 0) {
+        typingIndicator.textContent =
+          names.join(", ") + (names.length > 1 ? " are typing..." : " is typing...");
+      } else {
+        typingIndicator.textContent = "";
+      }
+    });
   });
 }
 
@@ -352,11 +353,7 @@ function loadPrivateChat(otherUid) {
       name.style.marginRight = "6px";
 
       const div = document.createElement("div");
-      if (msg.sender === auth.currentUser.email) {
-        div.className = "message-bubble sender";
-      } else {
-        div.className = "message-bubble receiver";
-      }
+      div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
       div.textContent = msg.text;
 
       const time = document.createElement("span");
@@ -366,12 +363,14 @@ function loadPrivateChat(otherUid) {
       wrapper.appendChild(name);
       wrapper.appendChild(div);
       wrapper.appendChild(time);
+
       if (msg.sender === auth.currentUser.email) {
         const status = document.createElement("span");
         status.className = "message-status";
         status.textContent = msg.read ? "Read" : "Sent";
         wrapper.appendChild(status);
       }
+
       privateMessages.appendChild(wrapper);
     });
     privateMessages.scrollTop = privateMessages.scrollHeight;
@@ -385,17 +384,19 @@ function loadPrivateChat(otherUid) {
       uid => uid !== auth.currentUser.uid && data[uid]
     );
 
-    // Remove old indicator if any
     const existing = privateMessages.querySelector(".typing-indicator");
     if (existing) existing.remove();
 
     if (typingUsers.length > 0) {
       getUserNamesByUids(typingUsers, (names) => {
-        const indicator = document.createElement("div");
-        indicator.className = "typing-indicator";
-        indicator.textContent = names[0] + " is typing...";
-        privateMessages.appendChild(indicator);
-        privateMessages.scrollTop = privateMessages.scrollHeight;
+        if (names.length > 0) {
+          const indicator = document.createElement("div");
+          indicator.className = "typing-indicator";
+          indicator.textContent =
+            names.join(", ") + (names.length > 1 ? " are typing..." : " is typing...");
+          privateMessages.appendChild(indicator);
+          privateMessages.scrollTop = privateMessages.scrollHeight;
+        }
       });
     }
   });
@@ -447,3 +448,4 @@ function getUserNamesByUids(uids, callback) {
     callback(names);
   }, { onlyOnce: true });
 }
+
