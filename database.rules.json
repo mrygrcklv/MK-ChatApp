@@ -19,6 +19,12 @@
     "groupTyping": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "privateTyping": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     }
   }
 }
