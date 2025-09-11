@@ -1,3 +1,9 @@
+/* Full updated app.js with group support, membership checks and UI fixes
+   - Uses Realtime Database paths that match your rules:
+     users/$uid, contacts/$uid, privateChats/$chatId, privateTyping/$chatId/$uid,
+     groupChats/$groupId/{members,messages,name}, userGroups/$uid/$groupId, groupsByCreator/$uid/$groupId, groupTyping/$groupId/$uid
+*/
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import {
   getAuth,
@@ -441,5 +447,4 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-
 
