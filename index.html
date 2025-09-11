@@ -22,10 +22,10 @@
   <!-- Chat Section -->
   <div id="chat-section" style="display: none;">
     <div id="top-bar">
-      <div class="user-info">
-        <span class="label">Logged in as:</span>
-        <span id="user-email"></span>
-        <div id="user-code"></div>
+      <div>
+        <span style="font-weight:500;">Logged in as:</span>
+        <span id="user-email" style="font-weight:600;"></span>
+        <div id="user-code" style="font-size:12px;color:#666;margin-top:2px;"></div>
       </div>
       <button id="logout-btn">Logout</button>
     </div>
@@ -33,50 +33,59 @@
     <div class="container">
       <!-- Sidebar for Users -->
       <aside id="user-sidebar">
-        <h3>Contacts</h3>
-        <div class="add-contact-row">
-          <input id="add-contact-input" placeholder="Enter first 5 chars of user ID" autocomplete="off">
-          <button id="add-contact-btn">Add</button>
+        <h3 style="font-size:18px; color:#388e3c; margin-bottom:12px;">Contacts</h3>
+        <div style="display:flex; gap:8px; width:100%; margin-bottom:12px;">
+          <input id="add-contact-input" placeholder="Enter first 5 chars of user ID" style="flex:1; padding:10px; border-radius:10px; border:1px solid #b2c9e7;" autocomplete="off">
+          <button id="add-contact-btn" style="padding:10px 12px; border-radius:10px; border:none; background:#4f8cff; color:#fff; font-weight:600;">Add</button>
         </div>
-        <ul id="contacts-list"></ul>
-        <button id="create-group-btn">+ Create Group</button>
-        <ul id="group-list"></ul>
-        <h3>Private Conversations</h3>
-        <ul id="private-convo-list"></ul>
-        <h3>Pending Messages</h3>
-        <ul id="pending-list"></ul>
-        <div id="sidebar-notification"></div>
+        <ul id="contacts-list" style="margin-bottom:16px;"></ul>
+        <!-- Group creation button -->
+        <button id="create-group-btn" style="width:100%;padding:10px 0;margin-bottom:16px;border-radius:10px;background:#4f8cff;color:#fff;font-weight:600;border:none;cursor:pointer;">+ Create Group</button>
+        <!-- Group list will be injected by JS -->
+        <ul id="group-list" style="margin-bottom:18px;"></ul>
+        <h3 style="font-size:16px; color:#388e3c; margin:12px 0 8px;">Private Conversations</h3>
+        <ul id="private-convo-list" style="margin-bottom:12px;"></ul>
+        <h3 style="font-size:16px; color:#388e3c; margin:12px 0 8px;">Pending Messages</h3>
+        <ul id="pending-list" style="margin-bottom:12px;"></ul>
+        <!-- Notification bar for requests -->
+        <div id="sidebar-notification" style="display:none; background:#fffbe6; border:1px solid #ffe082; border-radius:8px; padding:10px 12px; margin-bottom:12px; font-size:15px; color:#222;">
+          <!-- JS will fill this -->
+        </div>
         <ul id="user-list" style="display:none;"></ul>
       </aside>
 
       <!-- Main Chat Area -->
       <main id="chat-area">
-        <div class="chat-wrapper">
-          <!-- Private Chat -->
-          <section id="private-chat">
-            <div class="chat-box">
-              <h3>Private Chat with <span id="chatting-with">Nobody</span></h3>
-              <div id="private-messages" class="messages"></div>
-              <div class="input-row">
+        <div style="display: flex; gap: 32px; width: 100%;">
+          <!-- Private Chat (Left) -->
+          <section id="private-chat" style="flex:1;">
+            <div style="background:#f6faf8; border-radius:16px; box-shadow:0 2px 12px rgba(60,60,60,0.06); padding:24px 18px; min-height:400px; display:flex; flex-direction:column;">
+              <h3 style="font-size:18px; color:#388e3c; margin-bottom:10px;">
+                Private Chat with <span id="chatting-with" style="color:#222;">Nobody</span>
+              </h3>
+              <div id="private-messages" class="messages" style="flex:1;"></div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="private-input" placeholder="Type private message...">
-                <input type="file" id="private-image-input" accept="image/*" style="display:none">
+                <input type="file" id="private-image-input" accept="image/*" style="display:none" title="Choose image to send" aria-label="Choose private chat image">
+                <label for="private-image-input" class="sr-only" aria-hidden="true">Private image input</label>
                 <button id="private-send">Send</button>
-                <button id="private-image-btn">📷</button>
+                <button id="private-image-btn" title="Send image">📷</button>
               </div>
             </div>
           </section>
 
-          <!-- Group Chat -->
-          <section id="group-chat">
-            <div class="chat-box">
-              <h3>Group Chat: <span id="group-title">Group</span></h3>
-              <div id="group-messages" class="messages"></div>
-              <div id="typing-indicator"></div>
-              <div class="input-row">
+          <!-- Group Chat (Right) -->
+          <section id="group-chat" style="flex:1;">
+            <div style="background:#f6faf8; border-radius:16px; box-shadow:0 2px 12px rgba(60,60,60,0.06); padding:24px 18px; min-height:400px; display:flex; flex-direction:column;">
+              <h3 style="font-size:18px; color:#388e3c; margin-bottom:10px;">Group Chat: <span id="group-title" style="color:#222;">Group</span></h3>
+              <div id="group-messages" class="messages" style="flex:1;"></div>
+              <div id="typing-indicator" style="font-size:12px; color:#666; margin:5px;"></div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="group-input" placeholder="Type group message...">
-                <input type="file" id="group-image-input" accept="image/*" style="display:none">
+                <input type="file" id="group-image-input" accept="image/*" style="display:none" title="Choose image to send" aria-label="Choose group chat image">
+                <label for="group-image-input" class="sr-only" aria-hidden="true">Group image input</label>
                 <button id="group-send">Send</button>
-                <button id="group-image-btn">📷</button>
+                <button id="group-image-btn" title="Send image">📷</button>
               </div>
             </div>
           </section>
@@ -86,17 +95,17 @@
   </div>
 
   <!-- Group creation modal -->
-  <div id="create-group-modal">
-    <div class="modal-content">
-      <h3>Create New Group</h3>
-      <input id="new-group-name" placeholder="Group Name" autocomplete="off">
-      <div id="group-member-list"></div>
-      <button id="submit-group-btn">Create</button>
-      <button id="cancel-group-btn">Cancel</button>
+  <div id="create-group-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.18);z-index:2000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:32px 28px;border-radius:18px;box-shadow:0 8px 32px rgba(60,60,60,0.18);min-width:320px;">
+      <h3 style="margin-bottom:18px;color:#4f8cff;">Create New Group</h3>
+      <input id="new-group-name" placeholder="Group Name" style="width:100%;padding:10px;margin-bottom:14px;border-radius:8px;border:1px solid #b2c9e7;" autocomplete="off">
+      <div id="group-member-list" style="margin-bottom:14px;"></div>
+      <button id="submit-group-btn" style="padding:10px 24px;border-radius:8px;background:#43e97b;color:#fff;font-weight:600;border:none;cursor:pointer;">Create</button>
+      <button id="cancel-group-btn" style="padding:10px 24px;border-radius:8px;background:#e57373;color:#fff;font-weight:600;border:none;cursor:pointer;margin-left:10px;">Cancel</button>
     </div>
   </div>
 
-  <div id="notification-box"></div>
+  <div id="notification-box" style="display:none;"></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>
