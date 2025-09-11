@@ -10,15 +10,15 @@ import {
   getDatabase,
   ref,
   push,
+  set,
   update,
   onValue,
-  serverTimestamp,
   onChildAdded,
-  set,
-  get,
-  child
+  serverTimestamp,
+  get
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
+/* ---------- firebase config ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
   authDomain: "chatapp-1754e.firebaseapp.com",
@@ -34,480 +34,411 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
+/* ---------- UI elements ---------- */
 const signupBtn = document.getElementById("signup-btn");
 const loginBtn = document.getElementById("login-btn");
 const logoutBtn = document.getElementById("logout-btn");
+const fullnameInput = document.getElementById("fullname");
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
-const userEmail = document.getElementById("user-email");
 const authSection = document.getElementById("auth-section");
 const chatSection = document.getElementById("chat-section");
+const userEmail = document.getElementById("user-email");
+
+const usersTab = document.getElementById("users-tab");
+const groupsTab = document.getElementById("groups-tab");
+const usersListContainer = document.getElementById("users-list-container");
+const groupsListContainer = document.getElementById("groups-list-container");
 const userListEl = document.getElementById("user-list");
+const groupListEl = document.getElementById("group-list");
+const newGroupNameInput = document.getElementById("new-group-name");
+const createGroupBtn = document.getElementById("create-group-btn");
+const joinGroupInput = document.getElementById("join-group-id");
+const joinGroupBtn = document.getElementById("join-group-btn");
+
 const chattingWith = document.getElementById("chatting-with");
 const privateMessages = document.getElementById("private-messages");
 const privateInput = document.getElementById("private-input");
 const privateSend = document.getElementById("private-send");
+
+const currentGroupEl = document.getElementById("current-group");
 const groupMessages = document.getElementById("group-messages");
 const groupInput = document.getElementById("group-input");
 const groupSend = document.getElementById("group-send");
-const fullnameInput = document.getElementById("fullname");
-const typingIndicator = document.getElementById("typing-indicator");
-const usersTabBtn = document.getElementById("users-tab");
-const groupsTabBtn = document.getElementById("groups-tab");
-const userListContainer = document.getElementById("user-list");
-const groupListContainer = document.getElementById("group-list-container");
-const groupListEl = document.getElementById("group-list");
-const createGroupBtn = document.getElementById("create-group-btn");
-const newGroupNameInput = document.getElementById("new-group-name");
-const currentGroupEl = document.getElementById("current-group");
+const groupTyping = document.getElementById("group-typing");
 
-let privateUser = null;
-let currentGroupId = null;
-let userListenerRefs = [];
-let groupMessagesListener = null;
-let privateChatListener = null;
+/* ---------- state ---------- */
+let currentUser = null;
+let selectedPrivateUid = null;
+let selectedGroupId = null;
 
+/* ---------- auth handlers ---------- */
 signupBtn.addEventListener("click", async () => {
+  const fullName = fullnameInput.value.trim();
+  const email = emailInput.value.trim();
+  const pwd = passwordInput.value;
+  if (!fullName || !email || !pwd) return alert("Please fill all fields.");
   try {
-    const fullName = fullnameInput.value.trim();
-    if (!fullName) {
-      alert("Please enter your full name.");
-      return;
-    }
-    const cred = await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-    await update(ref(db, "users/" + cred.user.uid), {
+    const cred = await createUserWithEmailAndPassword(auth, email, pwd);
+    const uid = cred.user.uid;
+    await set(ref(db, `users/${uid}`), {
       email: cred.user.email,
-      fullName: fullName,
+      fullName,
       online: true,
       lastSeen: serverTimestamp()
     });
-    loadUsers();
+    fullnameInput.value = "";
+    emailInput.value = "";
+    passwordInput.value = "";
   } catch (err) {
-    alert(err.message);
     console.error(err);
+    alert(err.message || "Signup failed");
   }
 });
 
 loginBtn.addEventListener("click", async () => {
+  const email = emailInput.value.trim();
+  const pwd = passwordInput.value;
+  if (!email || !pwd) return alert("Please provide credentials.");
   try {
-    const cred = await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-    await update(ref(db, "users/" + cred.user.uid), {
-      email: cred.user.email,
-      online: true,
-      lastSeen: serverTimestamp()
-    });
-    loadUsers();
-    loadUserGroups();
+    const cred = await signInWithEmailAndPassword(auth, email, pwd);
+    const uid = cred.user.uid;
+    await update(ref(db, `users/${uid}`), { online: true, lastSeen: serverTimestamp() });
+    emailInput.value = ""; passwordInput.value = "";
   } catch (err) {
-    alert(err.message);
     console.error(err);
+    alert(err.message || "Login failed");
   }
 });
 
 logoutBtn.addEventListener("click", async () => {
-  const user = auth.currentUser;
-  if (user) {
-    await update(ref(db, "users/" + user.uid), { online: false, lastSeen: serverTimestamp() });
-  }
-  signOut(auth);
+  if (!currentUser) return;
+  await update(ref(db, `users/${currentUser.uid}`), { online: false, lastSeen: serverTimestamp() });
+  await signOut(auth);
 });
 
+/* ---------- auth state ---------- */
 onAuthStateChanged(auth, (user) => {
+  currentUser = user;
   if (user) {
     authSection.style.display = "none";
     chatSection.style.display = "block";
-    const userRef = ref(db, "users/" + user.uid);
-    onValue(userRef, (snapshot) => {
-      const userData = snapshot.val();
-      if (userData && userData.fullName) {
-        userEmail.textContent = getFirstName(userData.fullName);
-      } else {
-        userEmail.textContent = user.email;
-      }
-    });
-    update(ref(db, "users/" + user.uid), {
-      email: user.email,
-      online: true,
-      lastSeen: serverTimestamp()
-    }).then(() => {
-      loadUsers();
-      loadUserGroups();
-    });
-    loadTypingIndicators();
+    userEmail.textContent = user.email;
+    loadUsers();
+    loadUserGroups();
+    listenGroupTyping(); // global group typing watcher
   } else {
     authSection.style.display = "block";
     chatSection.style.display = "none";
-    userListEl.innerHTML = "";
-    groupListEl.innerHTML = "";
-    privateMessages.innerHTML = "";
-    groupMessages.innerHTML = "";
-    currentGroupEl.textContent = "None";
-    currentGroupId = null;
-    privateUser = null;
+    resetUI();
   }
 });
 
-function clearListeners() {
-  userListenerRefs.forEach(unsub => unsub && unsub());
-  userListenerRefs = [];
-  if (groupMessagesListener) groupMessagesListener = null;
-  if (privateChatListener) privateChatListener = null;
+/* ---------- UI helpers ---------- */
+function resetUI() {
+  userListEl.innerHTML = "";
+  groupListEl.innerHTML = "";
+  privateMessages.innerHTML = "";
+  groupMessages.innerHTML = "";
+  currentGroupEl.textContent = "None";
+  selectedGroupId = null;
+  selectedPrivateUid = null;
+  groupTyping.textContent = "";
 }
 
+/* ---------- sidebar tabs ---------- */
+usersTab.addEventListener("click", () => {
+  usersTab.classList.add("active");
+  groupsTab.classList.remove("active");
+  usersListContainer.classList.remove("hidden");
+  groupsListContainer.classList.add("hidden");
+});
+
+groupsTab.addEventListener("click", () => {
+  groupsTab.classList.add("active");
+  usersTab.classList.remove("active");
+  groupsListContainer.classList.remove("hidden");
+  usersListContainer.classList.add("hidden");
+  loadUserGroups(); // refresh when opening groups tab
+});
+
+/* ---------- USERS (private chat) ---------- */
 function loadUsers() {
   const usersRef = ref(db, "users");
-  const unsubscribe = onValue(usersRef, (snapshot) => {
+  onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
-    let foundOtherUsers = false;
-    snapshot.forEach((child) => {
-      const user = child.val();
+    const meId = currentUser?.uid;
+    let found = false;
+    snap.forEach(child => {
       const uid = child.key;
-      if (!user.email || uid === auth.currentUser?.uid) return;
-      foundOtherUsers = true;
+      const data = child.val();
+      if (!data || !data.email) return;
+      if (uid === meId) return;
+      found = true;
       const li = document.createElement("li");
-      li.textContent = `${getFirstName(user.fullName || user.email)} ${user.online ? "(online)" : "(offline)"}`;
-      li.classList.add(user.online ? "online" : "offline");
+      li.className = data.online ? "online" : "offline";
+      li.innerHTML = `<div>${getFirstName(data.fullName || data.email)} <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
       li.addEventListener("click", () => {
-        privateUser = uid;
-        chattingWith.textContent = getFirstName(user.fullName || user.email);
-        privateMessages.innerHTML = "";
-        loadPrivateChat(uid);
+        openPrivateChat(uid, data);
       });
       userListEl.appendChild(li);
     });
-    if (!foundOtherUsers) {
+    if (!found) {
       const li = document.createElement("li");
+      li.className = "offline";
       li.textContent = "No other users found.";
-      li.classList.add("offline");
       userListEl.appendChild(li);
     }
-  }, (error) => {
-    console.error("Error loading users:", error);
-    userListEl.innerHTML = "<li>Error loading users.</li>";
   });
-  userListenerRefs.push(() => unsubscribe && unsubscribe());
 }
 
-usersTabBtn.addEventListener("click", () => {
-  usersTabBtn.classList.add("active-tab");
-  groupsTabBtn.classList.remove("active-tab");
-  userListContainer.style.display = "";
-  groupListContainer.style.display = "none";
-});
-
-groupsTabBtn.addEventListener("click", () => {
-  groupsTabBtn.classList.add("active-tab");
-  usersTabBtn.classList.remove("active-tab");
-  userListContainer.style.display = "none";
-  groupListContainer.style.display = "";
-  loadUserGroups();
-});
-
-createGroupBtn.addEventListener("click", async () => {
-  const name = newGroupNameInput.value.trim();
-  if (!name) return alert("Enter group name");
-  const user = auth.currentUser;
-  if (!user) return;
-  const gRef = push(ref(db, "groupChats"));
-  const groupId = gRef.key;
-  const groupData = {
-    name: name,
-    creator: user.uid,
-    createdAt: Date.now()
-  };
-  await set(ref(db, "groupChats/" + groupId), groupData);
-  await set(ref(db, "groupChats/" + groupId + "/members/" + user.uid), true);
-  await set(ref(db, "userGroups/" + user.uid + "/" + groupId), true);
-  await set(ref(db, "groupsByCreator/" + user.uid + "/" + groupId), true);
-  newGroupNameInput.value = "";
-  loadUserGroups();
-});
-
-async function joinGroupById(groupIdInput) {
-  const code = groupIdInput.trim();
-  if (!code) return alert("Enter group ID");
-  const user = auth.currentUser;
-  if (!user) return;
-  const snap = await get(ref(db, "groupChats/" + code));
-  if (!snap.exists()) return alert("Group not found");
-  await set(ref(db, "groupChats/" + code + "/members/" + user.uid), true);
-  await set(ref(db, "userGroups/" + user.uid + "/" + code), true);
-  loadUserGroups();
+function openPrivateChat(otherUid, otherData) {
+  selectedPrivateUid = otherUid;
+  chattingWith.textContent = getFirstName(otherData.fullName || otherData.email);
+  selectedGroupId = null;
+  currentGroupEl.textContent = "None";
+  // load chat messages
+  loadPrivateMessages(otherUid);
 }
 
-async function loadUserGroups() {
-  const user = auth.currentUser;
-  if (!user) return;
-  groupListEl.innerHTML = "";
-  const userGroupsRef = ref(db, "userGroups/" + user.uid);
-  const snap = await get(userGroupsRef);
-  const groupIds = snap.exists() ? Object.keys(snap.val()) : [];
-  if (groupIds.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = "No groups yet. Create one or join by ID.";
-    groupListEl.appendChild(li);
-    return;
-  }
-  for (const gid of groupIds) {
-    const gSnap = await get(ref(db, "groupChats/" + gid + "/name"));
-    const groupName = gSnap.exists() ? gSnap.val() : (await get(ref(db, "groupChats/" + gid))).val()?.name || gid;
-    const li = document.createElement("li");
-    li.textContent = groupName + " (" + gid.slice(0, 6) + ")";
-    li.addEventListener("click", () => {
-      loadGroupChat(gid);
-      usersTabBtn.classList.remove("active-tab");
-      groupsTabBtn.classList.remove("active-tab");
-    });
-    const joinBtn = document.createElement("button");
-    joinBtn.textContent = "Open";
-    joinBtn.style.float = "right";
-    joinBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      loadGroupChat(gid);
-    });
-    li.appendChild(joinBtn);
-    groupListEl.appendChild(li);
-  }
-}
-
-groupSend.addEventListener("click", async () => {
-  const text = groupInput.value.trim();
-  if (!text || !currentGroupId) return;
-  const user = auth.currentUser;
-  if (!user) return;
-  const memberSnap = await get(ref(db, "groupChats/" + currentGroupId + "/members/" + user.uid));
-  if (!memberSnap.exists()) return alert("You are not a member of this group.");
-  await push(ref(db, "groupChats/" + currentGroupId + "/messages"), {
-    senderUid: user.uid,
-    senderEmail: user.email,
-    text: text,
-    ts: Date.now(),
-    readBy: {}
-  });
-  groupInput.value = "";
-  const typingRef = ref(db, "groupTyping/" + currentGroupId + "/" + user.uid);
-  set(typingRef, false);
-});
-
+/* private send */
 privateSend.addEventListener("click", async () => {
   const text = privateInput.value.trim();
-  if (!text || !privateUser) return;
-  const user = auth.currentUser;
-  if (!user) return;
-  const chatId = getChatId(user.uid, privateUser);
-  await push(ref(db, "privateChats/" + chatId), {
-    senderUid: user.uid,
-    senderEmail: user.email,
-    text: text,
+  if (!text || !selectedPrivateUid || !currentUser) return;
+  const chatId = getChatId(currentUser.uid, selectedPrivateUid);
+  const msgRef = push(ref(db, `privateChats/${chatId}`));
+  await set(msgRef, {
+    senderUid: currentUser.uid,
+    senderEmail: currentUser.email,
+    text,
     ts: Date.now(),
     read: false
   });
   privateInput.value = "";
-  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
-  set(typingRef, false);
+  // clear typing indicator
+  await set(ref(db, `privateTyping/${chatId}/${currentUser.uid}`), false);
 });
 
-privateInput.addEventListener("input", () => {
-  const user = auth.currentUser;
-  if (!user || !privateUser) return;
-  const chatId = getChatId(user.uid, privateUser);
-  const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
-  if (privateInput.value.trim() !== "") {
-    set(typingRef, true);
-  } else {
-    set(typingRef, false);
-  }
-});
-
-groupInput.addEventListener("input", () => {
-  const user = auth.currentUser;
-  if (!user || !currentGroupId) return;
-  const typingRef = ref(db, "groupTyping/" + currentGroupId + "/" + user.uid);
-  if (groupInput.value.trim() !== "") {
-    set(typingRef, true);
-  } else {
-    set(typingRef, false);
-  }
-});
-
-function loadTypingIndicators() {
-  const typingRef = ref(db, "groupTyping");
-  onValue(typingRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    const typingUsers = [];
-    Object.keys(data).forEach(gid => {
-      const groupData = data[gid] || {};
-      Object.keys(groupData).forEach(uid => {
-        if (uid !== auth.currentUser?.uid && groupData[uid]) {
-          typingUsers.push(uid);
-        }
-      });
-    });
-    if (typingUsers.length === 0) {
-      typingIndicator.textContent = "";
-    } else {
-      getUserNamesByUids(typingUsers, (names) => {
-        typingIndicator.textContent = names.join(", ") + (names.length > 1 ? " are typing..." : " is typing...");
-      });
-    }
-  });
-}
-
-function loadGroupChat(groupId) {
-  if (!auth.currentUser) return;
-  if (groupMessagesListener) groupMessagesListener = null;
-  currentGroupId = groupId;
-  currentGroupEl.textContent = "Loading...";
-  const memberRef = ref(db, "groupChats/" + groupId + "/members/" + auth.currentUser.uid);
-  get(memberRef).then((snap) => {
-    if (!snap.exists()) {
-      alert("You are not a member of this group. Join first.");
-      currentGroupEl.textContent = "None";
-      currentGroupId = null;
-      return;
-    }
-    get(ref(db, "groupChats/" + groupId + "/name")).then(gSnap => {
-      const gName = gSnap.exists() ? gSnap.val() : (groupId);
-      currentGroupEl.textContent = gName;
-    });
-    const messagesRef = ref(db, "groupChats/" + groupId + "/messages");
-    groupMessages.innerHTML = "";
-    const unsubscribe = onChildAdded(messagesRef, (snapshot) => {
-      const msg = snapshot.val();
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "flex";
-      wrapper.style.flexDirection = "column";
-      wrapper.style.alignItems = (msg.senderUid === auth.currentUser.uid) ? "flex-end" : "flex-start";
-      const name = document.createElement("span");
-      getUserByEmail(msg.senderEmail, (firstName) => {
-        name.textContent = firstName;
-      });
-      name.style.fontSize = "12px";
-      name.style.color = "#666";
-      name.style.marginBottom = "2px";
-      name.style.marginLeft = "6px";
-      name.style.marginRight = "6px";
-      const div = document.createElement("div");
-      div.className = (msg.senderUid === auth.currentUser.uid) ? "message-bubble sender" : "message-bubble receiver";
-      div.textContent = msg.text;
-      const time = document.createElement("span");
-      time.className = "message-timestamp";
-      time.textContent = formatTime(msg.ts);
-      wrapper.appendChild(name);
-      wrapper.appendChild(div);
-      wrapper.appendChild(time);
-      if (msg.senderUid === auth.currentUser.uid) {
-        const status = document.createElement("span");
-        status.className = "message-status";
-        const readers = msg.readBy ? Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
-        if (readers.length === 0) {
-          status.textContent = "Sent";
-        } else {
-          getUserNamesByUids(readers, (names) => {
-            if (names.length === 1) status.textContent = "Viewed by " + names[0];
-            else status.textContent = "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? " and others" : "");
-          });
-        }
-        wrapper.appendChild(status);
-      } else {
-        const updateRef = ref(db, "groupChats/" + groupId + "/messages/" + snapshot.key + "/readBy/" + auth.currentUser.uid);
-        set(updateRef, true);
-      }
-      groupMessages.appendChild(wrapper);
-      groupMessages.scrollTop = groupMessages.scrollHeight;
-    });
-    groupMessagesListener = unsubscribe;
-  });
-}
-
-function loadPrivateChat(otherUid) {
-  if (!auth.currentUser) return;
-  if (privateChatListener) privateChatListener = null;
-  const chatId = getChatId(auth.currentUser.uid, otherUid);
-  const chatRef = ref(db, "privateChats/" + chatId);
+/* listen private messages for the chat */
+function loadPrivateMessages(otherUid) {
+  if (!currentUser) return;
   privateMessages.innerHTML = "";
-  const unsubscribe = onValue(chatRef, (snapshot) => {
-    privateMessages.innerHTML = "";
-    snapshot.forEach((child) => {
-      const msg = child.val();
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "flex";
-      wrapper.style.flexDirection = "column";
-      wrapper.style.alignItems = (msg.senderUid === auth.currentUser.uid) ? "flex-end" : "flex-start";
-      if (msg.senderUid !== auth.currentUser.uid && !msg.read) {
-        update(ref(db, "privateChats/" + chatId + "/" + child.key), { read: true });
-      }
-      const name = document.createElement("span");
-      getUserByEmail(msg.senderEmail, (firstName) => {
-        name.textContent = firstName;
-      });
-      name.style.fontSize = "12px";
-      name.style.color = "#666";
-      name.style.marginBottom = "2px";
-      name.style.marginLeft = "6px";
-      name.style.marginRight = "6px";
-      const div = document.createElement("div");
-      div.className = (msg.senderUid === auth.currentUser.uid) ? "message-bubble sender" : "message-bubble receiver";
-      div.textContent = msg.text;
-      const time = document.createElement("span");
-      time.className = "message-timestamp";
-      time.textContent = formatTime(msg.ts);
-      wrapper.appendChild(name);
-      wrapper.appendChild(div);
-      wrapper.appendChild(time);
-      if (msg.senderUid === auth.currentUser.uid) {
-        const status = document.createElement("span");
-        status.className = "message-status";
-        status.textContent = msg.read ? "Read" : "Sent";
-        wrapper.appendChild(status);
-      }
-      privateMessages.appendChild(wrapper);
-    });
-    privateMessages.scrollTop = privateMessages.scrollHeight;
+  const chatId = getChatId(currentUser.uid, otherUid);
+  const refChats = ref(db, `privateChats/${chatId}`);
+  // use onChildAdded so new messages append
+  onChildAdded(refChats, (snap) => {
+    const m = snap.val();
+    renderPrivateMessage(m);
+    // mark read if receiver
+    if (m.senderUid !== currentUser.uid && m.read === false) {
+      set(ref(db, `privateChats/${chatId}/${snap.key}/read`), true);
+    }
   });
-  privateChatListener = unsubscribe;
-}
-
-function formatTime(ts) {
-  if (!ts) return "";
-  const date = new Date(ts);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function getChatId(uid1, uid2) {
-  return uid1 < uid2 ? uid1 + "_" + uid2 : uid2 + "_" + uid1;
-}
-
-function getFirstName(str) {
-  if (!str) return "";
-  if (str.includes("@")) return str.split("@")[0];
-  return str.split(" ")[0];
-}
-
-function getUserByEmail(email, callback) {
-  const usersRef = ref(db, "users");
-  get(usersRef).then(snapshot => {
-    let firstName = email.split("@")[0];
-    snapshot.forEach(child => {
-      const user = child.val();
-      if (user.email === email && user.fullName) {
-        firstName = getFirstName(user.fullName);
-      }
-    });
-    callback(firstName);
+  // typing indicator for private
+  onValue(ref(db, `privateTyping/${chatId}`), (snap) => {
+    const data = snap.val() || {};
+    const otherTyping = Object.keys(data).some(uid => uid !== currentUser.uid && data[uid]);
+    const small = document.createElement("div");
+    small.className = "typing";
+    small.textContent = otherTyping ? "They are typing..." : "";
+    // remove old then append
+    const existing = privateMessages.querySelector(".typing");
+    if (existing) existing.remove();
+    if (otherTyping) privateMessages.appendChild(small);
   });
 }
 
-function getUserNamesByUids(uids, callback) {
-  if (!uids || uids.length === 0) return callback([]);
-  const usersRef = ref(db, "users");
-  get(usersRef).then(snapshot => {
-    const names = [];
-    snapshot.forEach(child => {
-      if (uids.includes(child.key)) {
-        names.push(getFirstName(child.val().fullName || child.val().email));
-      }
+function renderPrivateMessage(msg) {
+  const wrapper = document.createElement("div");
+  wrapper.className = msg.senderUid === currentUser.uid ? "msg sender" : "msg receiver";
+  wrapper.textContent = msg.text;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = formatTime(msg.ts) + (msg.senderUid === currentUser.uid ? (msg.read ? " • Read" : " • Sent") : "");
+  wrapper.appendChild(meta);
+  privateMessages.appendChild(wrapper);
+  privateMessages.scrollTop = privateMessages.scrollHeight;
+}
+
+/* typing for private */
+privateInput.addEventListener("input", async () => {
+  if (!currentUser || !selectedPrivateUid) return;
+  const chatId = getChatId(currentUser.uid, selectedPrivateUid);
+  const val = privateInput.value.trim() !== "";
+  await set(ref(db, `privateTyping/${chatId}/${currentUser.uid}`), val);
+});
+
+/* ---------- GROUPS ---------- */
+createGroupBtn.addEventListener("click", async () => {
+  if (!currentUser) return alert("Login first");
+  const name = newGroupNameInput.value.trim();
+  if (!name) return alert("Enter a group name");
+  try {
+    // create group with push to get unique key
+    const gRef = push(ref(db, "groupChats"));
+    const gid = gRef.key;
+    // initial group meta and add creator as member
+    await set(ref(db, `groupChats/${gid}`), {
+      name,
+      creator: currentUser.uid,
+      createdAt: Date.now()
     });
-    callback(names);
+    // mark membership and userGroups/groupsByCreator
+    await set(ref(db, `groupChats/${gid}/members/${currentUser.uid}`), true);
+    await set(ref(db, `userGroups/${currentUser.uid}/${gid}`), true);
+    await set(ref(db, `groupsByCreator/${currentUser.uid}/${gid}`), true);
+    newGroupNameInput.value = "";
+    loadUserGroups();
+  } catch (err) {
+    console.error(err);
+    alert("Could not create group");
+  }
+});
+
+joinGroupBtn.addEventListener("click", async () => {
+  if (!currentUser) return alert("Login first");
+  const gid = joinGroupInput.value.trim();
+  if (!gid) return alert("Enter group ID");
+  try {
+    const snap = await get(ref(db, `groupChats/${gid}`));
+    if (!snap.exists()) return alert("Group not found");
+    // set membership & userGroups
+    await set(ref(db, `groupChats/${gid}/members/${currentUser.uid}`), true);
+    await set(ref(db, `userGroups/${currentUser.uid}/${gid}`), true);
+    joinGroupInput.value = "";
+    loadUserGroups();
+  } catch (err) {
+    console.error(err);
+    alert("Could not join group");
+  }
+});
+
+async function loadUserGroups() {
+  if (!currentUser) return;
+  groupListEl.innerHTML = "";
+  const snap = await get(ref(db, `userGroups/${currentUser.uid}`));
+  const ids = snap.exists() ? Object.keys(snap.val()) : [];
+  if (ids.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "No groups yet. Create or join one.";
+    groupListEl.appendChild(li);
+    return;
+  }
+  for (const gid of ids) {
+    // fetch group name
+    const gSnap = await get(ref(db, `groupChats/${gid}/name`));
+    const display = gSnap.exists() ? gSnap.val() : gid;
+    const li = document.createElement("li");
+    li.textContent = display;
+    li.addEventListener("click", () => selectGroup(gid, display));
+    // small copy id button
+    const b = document.createElement("button");
+    b.textContent = "ID";
+    b.className = "btn small outline";
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigator.clipboard?.writeText(gid).then(()=> alert("Group ID copied"));
+    });
+    li.appendChild(b);
+    groupListEl.appendChild(li);
+  }
+}
+
+/* select group and load messages */
+async function selectGroup(gid, displayName) {
+  if (!currentUser) return;
+  // confirm membership
+  const memberSnap = await get(ref(db, `groupChats/${gid}/members/${currentUser.uid}`));
+  if (!memberSnap.exists()) return alert("You are not a member of that group.");
+  selectedGroupId = gid;
+  currentGroupEl.textContent = displayName || gid;
+  // clear messages
+  groupMessages.innerHTML = "";
+  // listen messages via onChildAdded
+  onChildAdded(ref(db, `groupChats/${gid}/messages`), (snap) => {
+    const m = snap.val();
+    renderGroupMessage(m, gid, snap.key);
+    // if not sender, mark read
+    if (m.senderUid !== currentUser.uid) {
+      set(ref(db, `groupChats/${gid}/messages/${snap.key}/readBy/${currentUser.uid}`), true);
+    }
   });
 }
+
+/* send group message */
+groupSend.addEventListener("click", async () => {
+  if (!currentUser || !selectedGroupId) return alert("Select a group first.");
+  const text = groupInput.value.trim();
+  if (!text) return;
+  // verify membership server-side path exists (defensive)
+  const mem = await get(ref(db, `groupChats/${selectedGroupId}/members/${currentUser.uid}`));
+  if (!mem.exists()) return alert("You are not a member of this group.");
+  const mRef = push(ref(db, `groupChats/${selectedGroupId}/messages`));
+  await set(mRef, {
+    senderUid: currentUser.uid,
+    senderEmail: currentUser.email,
+    text,
+    ts: Date.now(),
+    readBy: {}
+  });
+  groupInput.value = "";
+  // clear typing
+  await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), false);
+});
+
+/* render group message */
+function renderGroupMessage(m, gid, messageKey) {
+  const wrapper = document.createElement("div");
+  wrapper.className = m.senderUid === currentUser.uid ? "msg sender" : "msg receiver";
+  wrapper.textContent = m.text;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  // build read indicator (for sender)
+  if (m.senderUid === currentUser.uid) {
+    const readers = m.readBy ? Object.keys(m.readBy).filter(u=>u!==currentUser.uid) : [];
+    meta.textContent = `${formatTime(m.ts)} • ${readers.length ? `Viewed (${readers.length})` : 'Sent'}`;
+  } else {
+    meta.textContent = formatTime(m.ts);
+  }
+  wrapper.appendChild(meta);
+  groupMessages.appendChild(wrapper);
+  groupMessages.scrollTop = groupMessages.scrollHeight;
+}
+
+/* group typing indicator writes */
+groupInput.addEventListener("input", async () => {
+  if (!currentUser || !selectedGroupId) return;
+  const v = groupInput.value.trim() !== "";
+  await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), v);
+});
+
+/* global listener to show who is typing across groups you are in */
+function listenGroupTyping() {
+  // watch whole groupTyping node and filter for groups you are in
+  onValue(ref(db, `groupTyping`), async (snap) => {
+    const data = snap.val() || {};
+    // gather typing people from groups where currentUser is member
+    const typingNames = [];
+    for (const gid of Object.keys(data)) {
+      const groupTypingObj = data[gid] || {};
+      for (const uid of Object.keys(groupTypingObj)) {
+        if (groupTypingObj[uid] && uid !== currentUser?.uid) {
+          // verify membership quickly
+          const member = await get(ref(db, `groupChats/${gid}/members/${uid}`));
+          if (member.exists()) {
+            // get display name
+            const uSnap = await get(ref(db, `users/${uid}`));
+            if (uSnap.exists()) typingNames.push(getFirstName(uSnap.val().fullName || uSnap.val().email));
+          }
+        }
+      }
+    }
+    groupTyping.textContent = typingNames.length ? (typingNames.join(", ") + (typingNames.length>1 ? " are typing..." : " is typing...")) : "";
+  });
+}
+
+/* ---------- helper utils ---------- */
+function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
+function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
+function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
