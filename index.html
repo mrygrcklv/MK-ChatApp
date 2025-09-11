@@ -1,83 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
   <title>MK Chat App</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css?family=Inter:400,500,700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Auth Section -->
-  <div id="auth-section">
-    <h2 class="welcome-title">Welcome to MK Chat</h2>
-    <input type="text" id="fullname" placeholder="Full Name">
+  <!-- AUTH -->
+  <div id="auth-section" class="card center-card">
+    <h2 class="brand">Welcome to MK Chat</h2>
+    <input type="text" id="fullname" placeholder="Full name">
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Password">
-    <button id="signup-btn">Sign Up</button>
-    <button id="login-btn">Login</button>
+    <div class="auth-actions">
+      <button id="signup-btn" class="btn primary">Sign Up</button>
+      <button id="login-btn" class="btn outline">Login</button>
+    </div>
   </div>
 
-  <!-- Chat Section -->
-  <div id="chat-section" style="display: none;">
-    <div id="top-bar">
-      <div>
-        <span class="logged-in-label">Logged in as:</span>
-        <span id="user-email"></span>
+  <!-- CHAT -->
+  <div id="chat-section" class="app-root" style="display:none;">
+    <header id="top-bar" class="topbar">
+      <div class="topbar-left">
+        <div class="brand-small">MK Chat</div>
+        <div class="user-info">Logged in as <span id="user-email"></span></div>
       </div>
-      <button id="logout-btn">Logout</button>
-    </div>
+      <div class="topbar-right">
+        <button id="logout-btn" class="btn small">Logout</button>
+      </div>
+    </header>
 
     <div class="container">
-      <!-- Sidebar with Tabs -->
       <aside id="sidebar">
         <div class="sidebar-tabs">
-          <button id="users-tab" class="active-tab">Users</button>
-          <button id="groups-tab">Groups</button>
+          <button id="users-tab" class="tab active">Users</button>
+          <button id="groups-tab" class="tab">Groups</button>
         </div>
 
-        <!-- Users List -->
-        <ul id="user-list" class="sidebar-list"></ul>
+        <!-- USERS container -->
+        <div id="users-list-container" class="list-container">
+          <h4 class="sidebar-title">All users</h4>
+          <ul id="user-list" class="list"></ul>
+        </div>
 
-        <!-- Groups List + Create -->
-        <div id="groups-section" class="hidden">
-          <ul id="group-list" class="sidebar-list"></ul>
-          <div class="group-create">
-            <input type="text" id="new-group-name" placeholder="Group name">
-            <button id="create-group-btn">Create</button>
+        <!-- GROUPS container -->
+        <div id="groups-list-container" class="list-container hidden">
+          <h4 class="sidebar-title">Your groups</h4>
+          <ul id="group-list" class="list"></ul>
+
+          <div class="group-forms">
+            <input id="new-group-name" placeholder="New group name">
+            <button id="create-group-btn" class="btn small primary">Create</button>
+            <div class="join-row">
+              <input id="join-group-id" placeholder="Join by Group ID">
+              <button id="join-group-btn" class="btn small outline">Join</button>
+            </div>
+            <small class="hint">Group ID is the group's key (click a group to copy its ID).</small>
           </div>
         </div>
       </aside>
 
-      <!-- Main Chat Area -->
       <main id="chat-area">
-        <div>
-          <!-- Private Chat -->
-          <section id="private-chat">
-            <div class="chat-box">
-              <h3>Private Chat with <span id="chatting-with">Nobody</span></h3>
-              <div id="private-messages" class="messages"></div>
-              <div class="typing-indicator" id="private-typing"></div>
-              <div class="input-area">
-                <input id="private-input" placeholder="Type private message...">
-                <button id="private-send">Send</button>
-              </div>
+        <section id="conversations">
+          <div id="private-panel" class="panel">
+            <div class="panel-head">
+              <h3>Private — <span id="chatting-with">Nobody</span></h3>
             </div>
-          </section>
+            <div id="private-messages" class="messages"></div>
+            <div class="input-row">
+              <input id="private-input" placeholder="Message someone...">
+              <button id="private-send" class="btn primary">Send</button>
+            </div>
+          </div>
 
-          <!-- Group Chat -->
-          <section id="group-chat">
-            <div class="chat-box">
-              <h3>Group Chat: <span id="current-group">None</span></h3>
-              <div id="group-messages" class="messages"></div>
-              <div class="typing-indicator" id="group-typing"></div>
-              <div class="input-area">
-                <input id="group-input" placeholder="Type group message...">
-                <button id="group-send">Send</button>
-              </div>
+          <div id="group-panel" class="panel">
+            <div class="panel-head">
+              <h3>Group — <span id="current-group">None</span></h3>
             </div>
-          </section>
-        </div>
+            <div id="group-messages" class="messages"></div>
+            <div id="group-typing" class="typing"></div>
+            <div class="input-row">
+              <input id="group-input" placeholder="Message group...">
+              <button id="group-send" class="btn primary">Send</button>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   </div>
