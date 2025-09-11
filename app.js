@@ -1,33 +1,39 @@
-
-// Firebase SDK imports
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { 
-  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-  signOut, onAuthStateChanged 
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-
-import { 
-  getDatabase, ref, push, update, onValue, serverTimestamp, onChildAdded, set 
+import {
+  getDatabase,
+  ref,
+  push,
+  update,
+  onValue,
+  serverTimestamp,
+  onChildAdded,
+  set,
+  get,
+  child
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
-// Firebase Config
 const firebaseConfig = {
-    apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
-    authDomain: "chatapp-1754e.firebaseapp.com",
-    databaseURL: "https://chatapp-1754e-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "chatapp-1754e",
-    storageBucket: "chatapp-1754e.firebasestorage.app",
-    messagingSenderId: "40067617299",
-    appId: "1:40067617299:web:7b23a059a1832cb7d765e6",
-    measurementId: "G-LR82HTGTV1"
-  };
+  apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
+  authDomain: "chatapp-1754e.firebaseapp.com",
+  databaseURL: "https://chatapp-1754e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chatapp-1754e",
+  storageBucket: "chatapp-1754e.firebasestorage.app",
+  messagingSenderId: "40067617299",
+  appId: "1:40067617299:web:7b23a059a1832cb7d765e6",
+  measurementId: "G-LR82HTGTV1"
+};
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// Elements
 const signupBtn = document.getElementById("signup-btn");
 const loginBtn = document.getElementById("login-btn");
 const logoutBtn = document.getElementById("logout-btn");
@@ -46,10 +52,21 @@ const groupInput = document.getElementById("group-input");
 const groupSend = document.getElementById("group-send");
 const fullnameInput = document.getElementById("fullname");
 const typingIndicator = document.getElementById("typing-indicator");
+const usersTabBtn = document.getElementById("users-tab");
+const groupsTabBtn = document.getElementById("groups-tab");
+const userListContainer = document.getElementById("user-list");
+const groupListContainer = document.getElementById("group-list-container");
+const groupListEl = document.getElementById("group-list");
+const createGroupBtn = document.getElementById("create-group-btn");
+const newGroupNameInput = document.getElementById("new-group-name");
+const currentGroupEl = document.getElementById("current-group");
 
 let privateUser = null;
+let currentGroupId = null;
+let userListenerRefs = [];
+let groupMessagesListener = null;
+let privateChatListener = null;
 
-// ---------------- SIGNUP ----------------
 signupBtn.addEventListener("click", async () => {
   try {
     const fullName = fullnameInput.value.trim();
@@ -67,11 +84,10 @@ signupBtn.addEventListener("click", async () => {
     loadUsers();
   } catch (err) {
     alert(err.message);
-    console.error("Signup error:", err);
+    console.error(err);
   }
 });
 
-// ---------------- LOGIN ----------------
 loginBtn.addEventListener("click", async () => {
   try {
     const cred = await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
@@ -81,13 +97,13 @@ loginBtn.addEventListener("click", async () => {
       lastSeen: serverTimestamp()
     });
     loadUsers();
+    loadUserGroups();
   } catch (err) {
     alert(err.message);
-    console.error("Login error:", err);
+    console.error(err);
   }
 });
 
-// ---------------- LOGOUT ----------------
 logoutBtn.addEventListener("click", async () => {
   const user = auth.currentUser;
   if (user) {
@@ -96,7 +112,6 @@ logoutBtn.addEventListener("click", async () => {
   signOut(auth);
 });
 
-// ---------------- AUTH STATE ----------------
 onAuthStateChanged(auth, (user) => {
   if (user) {
     authSection.style.display = "none";
@@ -114,21 +129,34 @@ onAuthStateChanged(auth, (user) => {
       email: user.email,
       online: true,
       lastSeen: serverTimestamp()
-    }).then(() => loadUsers());
-
-    loadGroupMessages();
+    }).then(() => {
+      loadUsers();
+      loadUserGroups();
+    });
     loadTypingIndicators();
   } else {
     authSection.style.display = "block";
     chatSection.style.display = "none";
     userListEl.innerHTML = "";
+    groupListEl.innerHTML = "";
+    privateMessages.innerHTML = "";
+    groupMessages.innerHTML = "";
+    currentGroupEl.textContent = "None";
+    currentGroupId = null;
+    privateUser = null;
   }
 });
 
-// ---------------- LOAD USERS ----------------
+function clearListeners() {
+  userListenerRefs.forEach(unsub => unsub && unsub());
+  userListenerRefs = [];
+  if (groupMessagesListener) groupMessagesListener = null;
+  if (privateChatListener) privateChatListener = null;
+}
+
 function loadUsers() {
   const usersRef = ref(db, "users");
-  onValue(usersRef, (snapshot) => {
+  const unsubscribe = onValue(usersRef, (snapshot) => {
     userListEl.innerHTML = "";
     let foundOtherUsers = false;
     snapshot.forEach((child) => {
@@ -157,130 +185,133 @@ function loadUsers() {
     console.error("Error loading users:", error);
     userListEl.innerHTML = "<li>Error loading users.</li>";
   });
+  userListenerRefs.push(() => unsubscribe && unsubscribe());
 }
 
-// ---------------- SEND GROUP MESSAGE ----------------
-groupSend.addEventListener("click", async () => {
-  const text = groupInput.value.trim();
-  if (!text) return;
+usersTabBtn.addEventListener("click", () => {
+  usersTabBtn.classList.add("active-tab");
+  groupsTabBtn.classList.remove("active-tab");
+  userListContainer.style.display = "";
+  groupListContainer.style.display = "none";
+});
+
+groupsTabBtn.addEventListener("click", () => {
+  groupsTabBtn.classList.add("active-tab");
+  usersTabBtn.classList.remove("active-tab");
+  userListContainer.style.display = "none";
+  groupListContainer.style.display = "";
+  loadUserGroups();
+});
+
+createGroupBtn.addEventListener("click", async () => {
+  const name = newGroupNameInput.value.trim();
+  if (!name) return alert("Enter group name");
   const user = auth.currentUser;
   if (!user) return;
+  const gRef = push(ref(db, "groupChats"));
+  const groupId = gRef.key;
+  const groupData = {
+    name: name,
+    creator: user.uid,
+    createdAt: Date.now()
+  };
+  await set(ref(db, "groupChats/" + groupId), groupData);
+  await set(ref(db, "groupChats/" + groupId + "/members/" + user.uid), true);
+  await set(ref(db, "userGroups/" + user.uid + "/" + groupId), true);
+  await set(ref(db, "groupsByCreator/" + user.uid + "/" + groupId), true);
+  newGroupNameInput.value = "";
+  loadUserGroups();
+});
 
-  await push(ref(db, "groupMessages"), {
-    sender: user.email,
+async function joinGroupById(groupIdInput) {
+  const code = groupIdInput.trim();
+  if (!code) return alert("Enter group ID");
+  const user = auth.currentUser;
+  if (!user) return;
+  const snap = await get(ref(db, "groupChats/" + code));
+  if (!snap.exists()) return alert("Group not found");
+  await set(ref(db, "groupChats/" + code + "/members/" + user.uid), true);
+  await set(ref(db, "userGroups/" + user.uid + "/" + code), true);
+  loadUserGroups();
+}
+
+async function loadUserGroups() {
+  const user = auth.currentUser;
+  if (!user) return;
+  groupListEl.innerHTML = "";
+  const userGroupsRef = ref(db, "userGroups/" + user.uid);
+  const snap = await get(userGroupsRef);
+  const groupIds = snap.exists() ? Object.keys(snap.val()) : [];
+  if (groupIds.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "No groups yet. Create one or join by ID.";
+    groupListEl.appendChild(li);
+    return;
+  }
+  for (const gid of groupIds) {
+    const gSnap = await get(ref(db, "groupChats/" + gid + "/name"));
+    const groupName = gSnap.exists() ? gSnap.val() : (await get(ref(db, "groupChats/" + gid))).val()?.name || gid;
+    const li = document.createElement("li");
+    li.textContent = groupName + " (" + gid.slice(0, 6) + ")";
+    li.addEventListener("click", () => {
+      loadGroupChat(gid);
+      usersTabBtn.classList.remove("active-tab");
+      groupsTabBtn.classList.remove("active-tab");
+    });
+    const joinBtn = document.createElement("button");
+    joinBtn.textContent = "Open";
+    joinBtn.style.float = "right";
+    joinBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      loadGroupChat(gid);
+    });
+    li.appendChild(joinBtn);
+    groupListEl.appendChild(li);
+  }
+}
+
+groupSend.addEventListener("click", async () => {
+  const text = groupInput.value.trim();
+  if (!text || !currentGroupId) return;
+  const user = auth.currentUser;
+  if (!user) return;
+  const memberSnap = await get(ref(db, "groupChats/" + currentGroupId + "/members/" + user.uid));
+  if (!memberSnap.exists()) return alert("You are not a member of this group.");
+  await push(ref(db, "groupChats/" + currentGroupId + "/messages"), {
+    senderUid: user.uid,
+    senderEmail: user.email,
     text: text,
     ts: Date.now(),
     readBy: {}
   });
   groupInput.value = "";
-
-  const typingRef = ref(db, "groupTyping/" + user.uid);
+  const typingRef = ref(db, "groupTyping/" + currentGroupId + "/" + user.uid);
   set(typingRef, false);
 });
 
-// ---------------- SEND PRIVATE MESSAGE ----------------
 privateSend.addEventListener("click", async () => {
   const text = privateInput.value.trim();
   if (!text || !privateUser) return;
   const user = auth.currentUser;
   if (!user) return;
-
   const chatId = getChatId(user.uid, privateUser);
   await push(ref(db, "privateChats/" + chatId), {
-    sender: user.email,
+    senderUid: user.uid,
+    senderEmail: user.email,
     text: text,
     ts: Date.now(),
     read: false
   });
   privateInput.value = "";
-
   const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
   set(typingRef, false);
 });
 
-// ---------------- GROUP CHAT ----------------
-function loadGroupMessages() {
-  const groupRef = ref(db, "groupMessages");
-  groupMessages.innerHTML = "";
-
-  onChildAdded(groupRef, (snapshot) => {
-    const msg = snapshot.val();
-    const msgKey = snapshot.key;
-    const wrapper = document.createElement("div");
-    wrapper.style.display = "flex";
-    wrapper.style.flexDirection = "column";
-    wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
-
-    const user = auth.currentUser;
-    if (user && (!msg.readBy || !msg.readBy[user.uid])) {
-      const msgRef = ref(db, "groupMessages/" + msgKey + "/readBy");
-      update(msgRef, { [user.uid]: true });
-    }
-
-    const name = document.createElement("span");
-    getUserByEmail(msg.sender, (firstName) => {
-      name.textContent = firstName;
-    });
-    name.style.fontSize = "12px";
-    name.style.color = "#666";
-    name.style.marginBottom = "2px";
-    name.style.marginLeft = "6px";
-    name.style.marginRight = "6px";
-
-    const div = document.createElement("div");
-    div.className = (msg.sender === auth.currentUser.email) ? "message-bubble sender" : "message-bubble receiver";
-    div.textContent = msg.text;
-
-    const time = document.createElement("span");
-    time.className = "message-timestamp";
-    time.textContent = formatTime(msg.ts);
-
-    wrapper.appendChild(name);
-    wrapper.appendChild(div);
-    wrapper.appendChild(time);
-
-    if (msg.sender === auth.currentUser.email) {
-      const status = document.createElement("span");
-      status.className = "message-status";
-
-      if (!msg.readBy) {
-        status.textContent = "Sent";
-      } else {
-        const readers = Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid);
-
-        if (readers.length === 0) {
-          status.textContent = "Sent";
-        } else {
-          getUserNamesByUids(readers, (names) => {
-            const totalUsers = userListEl.querySelectorAll("li").length;
-            if (names.length === totalUsers) {
-              status.textContent = "Viewed by everyone";
-            } else if (names.length === 1) {
-              status.textContent = "Viewed by " + names[0];
-            } else if (names.length <= 3) {
-              status.textContent = "Viewed by " + names.join(", ");
-            } else {
-              status.textContent = "Viewed by " + names.slice(0, 2).join(", ") + " and " + (names.length - 2) + " others";
-            }
-          });
-        }
-      }
-      wrapper.appendChild(status);
-    }
-
-    groupMessages.appendChild(wrapper);
-    groupMessages.scrollTop = groupMessages.scrollHeight;
-  });
-}
-
-// ---------------- TYPING INDICATORS ----------------
 privateInput.addEventListener("input", () => {
   const user = auth.currentUser;
   if (!user || !privateUser) return;
-
   const chatId = getChatId(user.uid, privateUser);
   const typingRef = ref(db, "privateTyping/" + chatId + "/" + user.uid);
-
   if (privateInput.value.trim() !== "") {
     set(typingRef, true);
   } else {
@@ -290,8 +321,8 @@ privateInput.addEventListener("input", () => {
 
 groupInput.addEventListener("input", () => {
   const user = auth.currentUser;
-  if (!user) return;
-  const typingRef = ref(db, "groupTyping/" + user.uid);
+  if (!user || !currentGroupId) return;
+  const typingRef = ref(db, "groupTyping/" + currentGroupId + "/" + user.uid);
   if (groupInput.value.trim() !== "") {
     set(typingRef, true);
   } else {
@@ -304,46 +335,51 @@ function loadTypingIndicators() {
   onValue(typingRef, (snapshot) => {
     const data = snapshot.val() || {};
     const typingUsers = [];
-
-    Object.keys(data).forEach(uid => {
-      if (uid !== auth.currentUser?.uid && data[uid]) {
-        getUserNamesByUids([uid], (names) => {
-          if (names.length > 0) {
-            typingUsers.push(names[0]);
-            typingIndicator.textContent = typingUsers.join(", ") + (typingUsers.length > 1 ? " are typing..." : " is typing...");
-          }
-        });
-      }
+    Object.keys(data).forEach(gid => {
+      const groupData = data[gid] || {};
+      Object.keys(groupData).forEach(uid => {
+        if (uid !== auth.currentUser?.uid && groupData[uid]) {
+          typingUsers.push(uid);
+        }
+      });
     });
-
     if (typingUsers.length === 0) {
       typingIndicator.textContent = "";
+    } else {
+      getUserNamesByUids(typingUsers, (names) => {
+        typingIndicator.textContent = names.join(", ") + (names.length > 1 ? " are typing..." : " is typing...");
+      });
     }
   });
 }
 
-// ---------------- PRIVATE CHAT ----------------
-function loadPrivateChat(otherUid) {
-  const chatId = getChatId(auth.currentUser.uid, otherUid);
-  const chatRef = ref(db, "privateChats/" + chatId);
-
-  // Load messages
-  onValue(chatRef, (snapshot) => {
-    privateMessages.innerHTML = "";
-    snapshot.forEach((child) => {
-      const msg = child.val();
+function loadGroupChat(groupId) {
+  if (!auth.currentUser) return;
+  if (groupMessagesListener) groupMessagesListener = null;
+  currentGroupId = groupId;
+  currentGroupEl.textContent = "Loading...";
+  const memberRef = ref(db, "groupChats/" + groupId + "/members/" + auth.currentUser.uid);
+  get(memberRef).then((snap) => {
+    if (!snap.exists()) {
+      alert("You are not a member of this group. Join first.");
+      currentGroupEl.textContent = "None";
+      currentGroupId = null;
+      return;
+    }
+    get(ref(db, "groupChats/" + groupId + "/name")).then(gSnap => {
+      const gName = gSnap.exists() ? gSnap.val() : (groupId);
+      currentGroupEl.textContent = gName;
+    });
+    const messagesRef = ref(db, "groupChats/" + groupId + "/messages");
+    groupMessages.innerHTML = "";
+    const unsubscribe = onChildAdded(messagesRef, (snapshot) => {
+      const msg = snapshot.val();
       const wrapper = document.createElement("div");
       wrapper.style.display = "flex";
       wrapper.style.flexDirection = "column";
-      wrapper.style.alignItems = (msg.sender === auth.currentUser.email) ? "flex-end" : "flex-start";
-
-      const msgRef = ref(db, "privateChats/" + chatId + "/" + child.key);
-      if (msg.sender !== auth.currentUser.email && !msg.read) {
-        update(msgRef, { read: true });
-      }
-
+      wrapper.style.alignItems = (msg.senderUid === auth.currentUser.uid) ? "flex-end" : "flex-start";
       const name = document.createElement("span");
-      getUserByEmail(msg.sender, (firstName) => {
+      getUserByEmail(msg.senderEmail, (firstName) => {
         name.textContent = firstName;
       });
       name.style.fontSize = "12px";
@@ -351,23 +387,75 @@ function loadPrivateChat(otherUid) {
       name.style.marginBottom = "2px";
       name.style.marginLeft = "6px";
       name.style.marginRight = "6px";
-
       const div = document.createElement("div");
-      if (msg.sender === auth.currentUser.email) {
-        div.className = "message-bubble sender";
-      } else {
-        div.className = "message-bubble receiver";
-      }
+      div.className = (msg.senderUid === auth.currentUser.uid) ? "message-bubble sender" : "message-bubble receiver";
       div.textContent = msg.text;
-
       const time = document.createElement("span");
       time.className = "message-timestamp";
       time.textContent = formatTime(msg.ts);
-
       wrapper.appendChild(name);
       wrapper.appendChild(div);
       wrapper.appendChild(time);
-      if (msg.sender === auth.currentUser.email) {
+      if (msg.senderUid === auth.currentUser.uid) {
+        const status = document.createElement("span");
+        status.className = "message-status";
+        const readers = msg.readBy ? Object.keys(msg.readBy).filter(uid => uid !== auth.currentUser.uid) : [];
+        if (readers.length === 0) {
+          status.textContent = "Sent";
+        } else {
+          getUserNamesByUids(readers, (names) => {
+            if (names.length === 1) status.textContent = "Viewed by " + names[0];
+            else status.textContent = "Viewed by " + names.slice(0, 2).join(", ") + (names.length > 2 ? " and others" : "");
+          });
+        }
+        wrapper.appendChild(status);
+      } else {
+        const updateRef = ref(db, "groupChats/" + groupId + "/messages/" + snapshot.key + "/readBy/" + auth.currentUser.uid);
+        set(updateRef, true);
+      }
+      groupMessages.appendChild(wrapper);
+      groupMessages.scrollTop = groupMessages.scrollHeight;
+    });
+    groupMessagesListener = unsubscribe;
+  });
+}
+
+function loadPrivateChat(otherUid) {
+  if (!auth.currentUser) return;
+  if (privateChatListener) privateChatListener = null;
+  const chatId = getChatId(auth.currentUser.uid, otherUid);
+  const chatRef = ref(db, "privateChats/" + chatId);
+  privateMessages.innerHTML = "";
+  const unsubscribe = onValue(chatRef, (snapshot) => {
+    privateMessages.innerHTML = "";
+    snapshot.forEach((child) => {
+      const msg = child.val();
+      const wrapper = document.createElement("div");
+      wrapper.style.display = "flex";
+      wrapper.style.flexDirection = "column";
+      wrapper.style.alignItems = (msg.senderUid === auth.currentUser.uid) ? "flex-end" : "flex-start";
+      if (msg.senderUid !== auth.currentUser.uid && !msg.read) {
+        update(ref(db, "privateChats/" + chatId + "/" + child.key), { read: true });
+      }
+      const name = document.createElement("span");
+      getUserByEmail(msg.senderEmail, (firstName) => {
+        name.textContent = firstName;
+      });
+      name.style.fontSize = "12px";
+      name.style.color = "#666";
+      name.style.marginBottom = "2px";
+      name.style.marginLeft = "6px";
+      name.style.marginRight = "6px";
+      const div = document.createElement("div");
+      div.className = (msg.senderUid === auth.currentUser.uid) ? "message-bubble sender" : "message-bubble receiver";
+      div.textContent = msg.text;
+      const time = document.createElement("span");
+      time.className = "message-timestamp";
+      time.textContent = formatTime(msg.ts);
+      wrapper.appendChild(name);
+      wrapper.appendChild(div);
+      wrapper.appendChild(time);
+      if (msg.senderUid === auth.currentUser.uid) {
         const status = document.createElement("span");
         status.className = "message-status";
         status.textContent = msg.read ? "Read" : "Sent";
@@ -377,75 +465,49 @@ function loadPrivateChat(otherUid) {
     });
     privateMessages.scrollTop = privateMessages.scrollHeight;
   });
-
-  // 🔥 Typing indicator listener
-  const typingRef = ref(db, "privateTyping/" + chatId);
-  onValue(typingRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    const typingUsers = Object.keys(data).filter(
-      uid => uid !== auth.currentUser.uid && data[uid]
-    );
-
-    // Remove old indicator if any
-    const existing = privateMessages.querySelector(".typing-indicator");
-    if (existing) existing.remove();
-
-    if (typingUsers.length > 0) {
-      getUserNamesByUids(typingUsers, (names) => {
-        const indicator = document.createElement("div");
-        indicator.className = "typing-indicator";
-        indicator.textContent = names[0] + " is typing...";
-        privateMessages.appendChild(indicator);
-        privateMessages.scrollTop = privateMessages.scrollHeight;
-      });
-    }
-  });
+  privateChatListener = unsubscribe;
 }
 
-// ---------------- FORMAT TIMESTAMP ----------------
 function formatTime(ts) {
   if (!ts) return "";
   const date = new Date(ts);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Helper for consistent chat IDs
 function getChatId(uid1, uid2) {
   return uid1 < uid2 ? uid1 + "_" + uid2 : uid2 + "_" + uid1;
 }
 
-// Helper: Get first name from full name or email
 function getFirstName(str) {
   if (!str) return "";
   if (str.includes("@")) return str.split("@")[0];
   return str.split(" ")[0];
 }
 
-// Helper: Find user by email and get first name (async)
 function getUserByEmail(email, callback) {
   const usersRef = ref(db, "users");
-  onValue(usersRef, (snapshot) => {
+  get(usersRef).then(snapshot => {
     let firstName = email.split("@")[0];
-    snapshot.forEach((child) => {
+    snapshot.forEach(child => {
       const user = child.val();
       if (user.email === email && user.fullName) {
         firstName = getFirstName(user.fullName);
       }
     });
     callback(firstName);
-  }, { onlyOnce: true });
+  });
 }
 
 function getUserNamesByUids(uids, callback) {
+  if (!uids || uids.length === 0) return callback([]);
   const usersRef = ref(db, "users");
-  onValue(usersRef, (snapshot) => {
+  get(usersRef).then(snapshot => {
     const names = [];
-    snapshot.forEach((child) => {
+    snapshot.forEach(child => {
       if (uids.includes(child.key)) {
         names.push(getFirstName(child.val().fullName || child.val().email));
       }
     });
     callback(names);
-  }, { onlyOnce: true });
+  });
 }
-
