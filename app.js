@@ -10,13 +10,14 @@ import {
 
 // Firebase config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  databaseURL: "YOUR_DB_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCWW-WrrnsHsywUOvFs4UL0y2Q8se81rvg",
+  authDomain: "chatapp-1754e.firebaseapp.com",
+  databaseURL: "https://chatapp-1754e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chatapp-1754e",
+  storageBucket: "chatapp-1754e.firebasestorage.app",
+  messagingSenderId: "40067617299",
+  appId: "1:40067617299:web:7b23a059a1832cb7d765e6",
+  measurementId: "G-LR82HTGTV1"
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth();
