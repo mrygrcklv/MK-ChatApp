@@ -11,7 +11,6 @@
   <!-- Auth Section -->
   <div id="auth-section">
     <h2 style="font-weight:500; color:#388e3c; margin-bottom:18px;">Welcome to MK Chat</h2>
-    <!-- Add this inside #auth-section above the email input -->
     <input type="text" id="fullname" placeholder="Full Name">
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Password">
@@ -30,22 +29,36 @@
     </div>
 
     <div class="container">
-      <!-- Sidebar for Users -->
+      <!-- Sidebar -->
       <aside id="user-sidebar">
-        <h3 style="font-size:18px; color:#388e3c; margin-bottom:12px;">All Users</h3>
-        <ul id="user-list"></ul>
+        <div class="sidebar-tabs">
+          <button id="users-tab" class="active-tab">Users</button>
+          <button id="groups-tab">Groups</button>
+        </div>
+
+        <!-- Users List -->
+        <ul id="user-list" class="sidebar-list"></ul>
+
+        <!-- Groups List -->
+        <div id="group-list-container" class="sidebar-list" style="display:none;">
+          <ul id="group-list"></ul>
+          <div class="group-actions">
+            <input type="text" id="new-group-name" placeholder="New group name">
+            <button id="create-group-btn">Create</button>
+          </div>
+        </div>
       </aside>
 
       <!-- Main Chat Area -->
       <main id="chat-area">
-        <div style="display: flex; gap: 32px; width: 100%;">
-          <!-- Private Chat (Left) -->
+        <div style="display: flex; gap: 32px; width: 100%; height:100%;">
+          <!-- Private Chat -->
           <section id="private-chat" style="flex:1;">
-            <div style="background:#f6faf8; border-radius:16px; box-shadow:0 2px 12px rgba(60,60,60,0.06); padding:24px 18px; min-height:400px; display:flex; flex-direction:column;">
+            <div>
               <h3 style="font-size:18px; color:#388e3c; margin-bottom:10px;">
                 Private Chat with <span id="chatting-with" style="color:#222;">Nobody</span>
               </h3>
-              <div id="private-messages" class="messages" style="flex:1;"></div>
+              <div id="private-messages" class="messages"></div>
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="private-input" placeholder="Type private message...">
                 <button id="private-send">Send</button>
@@ -53,12 +66,14 @@
             </div>
           </section>
 
-          <!-- Group Chat (Right) -->
+          <!-- Group Chat -->
           <section id="group-chat" style="flex:1;">
-            <div style="background:#f6faf8; border-radius:16px; box-shadow:0 2px 12px rgba(60,60,60,0.06); padding:24px 18px; min-height:400px; display:flex; flex-direction:column;">
-              <h3 style="font-size:18px; color:#388e3c; margin-bottom:10px;">Group Chat</h3>
-              <div id="group-messages" class="messages" style="flex:1;"></div>
-              <div id="typing-indicator" style="font-size:12px; color:#666; margin:5px;"></div>
+            <div>
+              <h3 style="font-size:18px; color:#388e3c; margin-bottom:10px;">
+                Group Chat: <span id="current-group" style="color:#222;">None</span>
+              </h3>
+              <div id="group-messages" class="messages"></div>
+              <div id="typing-indicator" class="typing-indicator"></div>
               <div style="display:flex; gap:8px; margin-top:8px;">
                 <input id="group-input" placeholder="Type group message...">
                 <button id="group-send">Send</button>
