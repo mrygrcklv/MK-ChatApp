@@ -195,29 +195,17 @@ groupsTab.addEventListener("click", () => {
 */
 
 function loadUsers() {
-  onValue(usersRef, (snap) => {
-  console.log("📦 Users snapshot raw:", snap.val());
-  ...
-});
-
-  
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
+    console.log("📦 Users snapshot raw:", snap.val());
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
-    console.log("🔄 loadUsers: currentUser =", meId);
-    console.log("🔄 All users snapshot:", snap.val());
 
     snap.forEach(async (child) => {
       const uid = child.key;
       const data = child.val();
 
-      if (!data || uid === meId) {
-        console.log("⏭️ Skipped self or empty:", uid);
-        return;
-      }
-
-      console.log("👤 Checking user:", uid, data);
+      if (!data || uid === meId) return;
 
       const li = document.createElement("li");
       li.className = data.online ? "online" : "offline";
@@ -239,10 +227,8 @@ function loadUsers() {
       try {
         const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
         const status = fSnap.exists() ? fSnap.val() : null;
-        console.log(`🤝 Friend status ${meId} -> ${uid}:`, status);
 
         if (status === true) {
-          // already friends
           const msgBtn = document.createElement("button");
           msgBtn.className = "btn small";
           msgBtn.textContent = "Message";
@@ -315,7 +301,6 @@ function loadUsers() {
           actions.appendChild(decline);
 
         } else {
-          // no relation
           const add = document.createElement("button");
           add.className = "btn small primary";
           add.textContent = "Add Friend";
@@ -331,20 +316,6 @@ function loadUsers() {
         }
       } catch (err) {
         console.error("⚠️ friends check error for", uid, err);
-
-        // fallback: still show Add Friend
-        const add = document.createElement("button");
-        add.className = "btn small primary";
-        add.textContent = "Add Friend";
-        add.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const updates = {};
-          updates[`friends/${meId}/${uid}`] = "pending_sent";
-          updates[`friends/${uid}/${meId}`] = "pending_incoming";
-          await update(ref(db), updates);
-          loadUsers();
-        });
-        actions.appendChild(add);
       }
 
       li.appendChild(actions);
@@ -614,6 +585,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
