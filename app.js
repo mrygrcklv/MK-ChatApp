@@ -120,12 +120,20 @@ logoutBtn.addEventListener("click", async () => {
 });
 
 /* ---------- auth state ---------- */
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   if (user) {
     authSection.style.display = "none";
     chatSection.style.display = "block";
-    userEmail.textContent = user.email;
+
+    // fetch fullName from DB
+    const snap = await get(ref(db, `users/${user.uid}`));
+    if (snap.exists() && snap.val().fullName) {
+      document.getElementById("user-name").textContent = snap.val().fullName;
+    } else {
+      document.getElementById("user-name").textContent = user.email;
+    }
+
     loadUsers();
     loadUserGroups();
     listenGroupTyping();
@@ -275,14 +283,17 @@ createGroupBtn.addEventListener("click", async () => {
   try {
     const gRef = push(ref(db, "groupChats"));
     const gid = gRef.key;
-    await set(ref(db, `groupChats/${gid}`), {
-      name,
-      creator: currentUser.uid,
-      createdAt: Date.now()
-    });
-    await set(ref(db, `groupChats/${gid}/members/${currentUser.uid}`), true);
-    await set(ref(db, `userGroups/${currentUser.uid}/${gid}`), true);
-    await set(ref(db, `groupsByCreator/${currentUser.uid}/${gid}`), true);
+
+    const updates = {};
+    updates[`groupChats/${gid}/name`] = name;
+    updates[`groupChats/${gid}/creator`] = currentUser.uid;
+    updates[`groupChats/${gid}/createdAt`] = Date.now();
+    updates[`groupChats/${gid}/members/${currentUser.uid}`] = true;
+    updates[`userGroups/${currentUser.uid}/${gid}`] = true;
+    updates[`groupsByCreator/${currentUser.uid}/${gid}`] = true;
+
+    await update(ref(db), updates);
+
     newGroupNameInput.value = "";
     loadUserGroups();
   } catch (err) {
@@ -410,3 +421,4 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
