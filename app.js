@@ -199,10 +199,13 @@ function loadUsers() {
   onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
+
     snap.forEach(async (child) => {
       const uid = child.key;
       const data = child.val();
-      if (!data || !data.email || uid === meId) return;
+
+      // skip only if no record or if this is me
+      if (!data || uid === meId) return;
 
       const li = document.createElement("li");
       li.className = data.online ? "online" : "offline";
@@ -210,8 +213,15 @@ function loadUsers() {
       li.style.justifyContent = "space-between";
       li.style.alignItems = "center";
 
+      // fallback to fullName, then email, then UID
+      const displayName =
+        data.fullName || data.email || uid;
+
       const left = document.createElement("div");
-      left.innerHTML = `<div>${getFirstName(data.fullName || data.email)} <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
+      left.innerHTML = `<div>${getFirstName(displayName)} 
+        <small style="opacity:.6">
+          ${data.online ? "online" : "offline"}
+        </small></div>`;
       li.appendChild(left);
 
       // container for action buttons
@@ -223,11 +233,13 @@ function loadUsers() {
         const status = fSnap.exists() ? fSnap.val() : null;
 
         if (status === true) {
-          // already friends -> clicking opens chat (also show message icon)
+          // already friends -> show "Message" + "Unfriend"
           const msgBtn = document.createElement("button");
           msgBtn.className = "btn small";
           msgBtn.textContent = "Message";
-          msgBtn.addEventListener("click", () => openPrivateChat(uid, data));
+          msgBtn.addEventListener("click", () =>
+            openPrivateChat(uid, data)
+          );
           actions.appendChild(msgBtn);
 
           const unfriendBtn = document.createElement("button");
@@ -243,6 +255,7 @@ function loadUsers() {
             loadUsers();
           });
           actions.appendChild(unfriendBtn);
+
         } else if (status === "pending_sent") {
           // I sent a request to them
           const pending = document.createElement("button");
@@ -264,6 +277,7 @@ function loadUsers() {
             loadUsers();
           });
           actions.appendChild(cancel);
+
         } else if (status === "pending_incoming") {
           // they sent me a request -> show Accept / Decline
           const accept = document.createElement("button");
@@ -271,7 +285,6 @@ function loadUsers() {
           accept.textContent = "Accept";
           accept.addEventListener("click", async (e) => {
             e.stopPropagation();
-            // make them mutual friends
             const updates = {};
             updates[`friends/${meId}/${uid}`] = true;
             updates[`friends/${uid}/${meId}`] = true;
@@ -293,6 +306,7 @@ function loadUsers() {
             loadUsers();
           });
           actions.appendChild(decline);
+
         } else {
           // no relation -> show Add Friend
           const add = document.createElement("button");
@@ -300,7 +314,6 @@ function loadUsers() {
           add.textContent = "Add Friend";
           add.addEventListener("click", async (e) => {
             e.stopPropagation();
-            // write pending markers on both sides
             const updates = {};
             updates[`friends/${meId}/${uid}`] = "pending_sent";
             updates[`friends/${uid}/${meId}`] = "pending_incoming";
@@ -311,11 +324,6 @@ function loadUsers() {
         }
       } catch (err) {
         console.error("friends check error", err);
-        const fallbackBtn = document.createElement("button");
-        fallbackBtn.className = "btn small";
-        fallbackBtn.textContent = "Add Friend";
-        fallbackBtn.addEventListener("click", () => alert("Try again."));
-        actions.appendChild(fallbackBtn);
       }
 
       li.appendChild(actions);
@@ -585,3 +593,4 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
