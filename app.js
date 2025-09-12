@@ -132,12 +132,21 @@ onAuthStateChanged(auth, async (user) => {
     authSection.style.display = "none";
     chatSection.style.display = "block";
 
-    // show display name
-    const snap = await get(ref(db, `users/${user.uid}`));
-    if (snap.exists() && snap.val().fullName) {
-      userNameSpan.textContent = snap.val().fullName;
+    // ensure user record exists/updates
+    const uRef = ref(db, `users/${user.uid}`);
+    const snap = await get(uRef);
+    if (!snap.exists()) {
+      await set(uRef, {
+        email: user.email,
+        fullName: user.displayName || user.email,
+        online: true,
+        lastSeen: serverTimestamp()
+      });
+      userNameSpan.textContent = user.displayName || user.email;
     } else {
-      userNameSpan.textContent = user.email;
+      const val = snap.val();
+      await update(uRef, { online: true, lastSeen: serverTimestamp() });
+      userNameSpan.textContent = val.fullName || val.email || user.email;
     }
 
     loadUsers();
@@ -585,6 +594,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
