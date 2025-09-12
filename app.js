@@ -195,6 +195,12 @@ groupsTab.addEventListener("click", () => {
 */
 
 function loadUsers() {
+  onValue(usersRef, (snap) => {
+  console.log("📦 Users snapshot raw:", snap.val());
+  ...
+});
+
+  
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
@@ -608,5 +614,6 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
