@@ -1,68 +1,69 @@
 {
   "rules": {
     "users": {
-      ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
-      }
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      },
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "privateChats": {
-      "$chatId": {
-        ".read": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))",
-        ".write": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))"
-      }
-    },
-    "privateTyping": {
-      "$chatId": {
-        ".read": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))",
-        ".write": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))"
-      }
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "groupChats": {
-      "$groupId": {
-        ".read": "auth != null && data.child('members/' + auth.uid).val() === true",
-        ".write": "auth != null && (newData.child('members/' + auth.uid).val() === true || data.child('members/' + auth.uid).val() === true)",
-
-        "messages": {
-          ".read": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true",
-          ".write": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true"
+      ".read": "auth != null",
+      "$gid": {
+        "name": {
+          ".read": "auth != null",
+          ".write": "root.child('groupChats/'+$gid+'/creator').val() === auth.uid"
         },
-
+        "creator": {
+          ".read": "auth != null",
+          ".write": "false"
+        },
+        "createdAt": {
+          ".read": "auth != null",
+          ".write": "false"
+        },
         "members": {
-          "$memberId": {
-            ".read": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true",
-            ".write": "auth != null && $memberId === auth.uid"
-          }
+          ".read": "root.child('groupChats/'+$gid+'/members/'+auth.uid).exists()",
+          ".write": "root.child('groupChats/'+$gid+'/creator').val() === auth.uid"
+        },
+        "messages": {
+          ".read": "root.child('groupChats/'+$gid+'/members/'+auth.uid).exists()",
+          ".write": "root.child('groupChats/'+$gid+'/members/'+auth.uid).exists()"
         }
       }
     },
     "userGroups": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$groupId": {
-          ".write": "auth != null && auth.uid === $uid && newData.val() === true"
-        }
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "friends": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
       }
     },
     "groupsByCreator": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$groupId": {
-          ".write": "auth != null && auth.uid === $uid && newData.val() === true"
-        }
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
       }
+    },
+    "privateTyping": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "groupTyping": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    "friends": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$fid": {
-          ".write": "auth != null && (auth.uid === $uid || auth.uid === $fid)"
-        }
-      }
-    }
+    ".read": "auth != null",
+    ".write": "auth != null"
   }
 }
