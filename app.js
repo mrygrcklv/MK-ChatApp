@@ -189,20 +189,6 @@ groupsTab.addEventListener("click", () => {
   loadUserGroups();
 });
 
-/* ---------- FRIENDS + USERS (with request states) ---------- */
-/*
-  friends path semantics used here (fits current database.rules.json):
-  - friends/{userA}/{userB} can be:
-      true                => confirmed friend
-      "pending_sent"      => userA has SENT a request to userB (userA sees "Pending")
-      "pending_incoming"  => userA has an INCOMING request from userB (userA sees Accept/Decline)
-  We write both sides when sending request:
-    friends/{from}/{to} = "pending_sent"
-    friends/{to}/{from} = "pending_incoming"
-  Accepting sets both sides to true.
-  Declining removes both sides.
-*/
-
 function loadUsers() {
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
@@ -210,126 +196,130 @@ function loadUsers() {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
 
-    snap.forEach(async (child) => {
-      const uid = child.key;
-      const data = child.val();
+    // convert children snapshot to array para ma-for..of
+    const children = [];
+    snap.forEach(child => children.push(child));
 
-      if (!data || uid === meId) return;
+    (async () => {
+      for (const child of children) {
+        const uid = child.key;
+        const data = child.val();
 
-      const li = document.createElement("li");
-      li.className = data.online ? "online" : "offline";
-      li.style.display = "flex";
-      li.style.justifyContent = "space-between";
-      li.style.alignItems = "center";
+        if (!data || uid === meId) continue;
 
-      const displayName = data.fullName || data.email || uid;
-      const left = document.createElement("div");
-      left.innerHTML = `<div>${getFirstName(displayName)} 
-        <small style="opacity:.6">
-          ${data.online ? "online" : "offline"}
-        </small></div>`;
-      li.appendChild(left);
+        const li = document.createElement("li");
+        li.className = data.online ? "online" : "offline";
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        li.style.alignItems = "center";
 
-      const actions = document.createElement("div");
-      actions.className = "friend-actions";
+        const displayName = data.fullName || data.email || uid;
+        const left = document.createElement("div");
+        left.innerHTML = `<div>${getFirstName(displayName)} 
+          <small style="opacity:.6">
+            ${data.online ? "online" : "offline"}
+          </small></div>`;
+        li.appendChild(left);
 
-      try {
-        const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
-        const status = fSnap.exists() ? fSnap.val() : null;
+        const actions = document.createElement("div");
+        actions.className = "friend-actions";
 
-        if (status === true) {
-          const msgBtn = document.createElement("button");
-          msgBtn.className = "btn small";
-          msgBtn.textContent = "Message";
-          msgBtn.addEventListener("click", () =>
-            openPrivateChat(uid, data)
-          );
-          actions.appendChild(msgBtn);
+        try {
+          const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
+          const status = fSnap.exists() ? fSnap.val() : null;
 
-          const unfriendBtn = document.createElement("button");
-          unfriendBtn.className = "btn small outline";
-          unfriendBtn.textContent = "Unfriend";
-          unfriendBtn.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!confirm("Remove friend?")) return;
-            const updates = {};
-            updates[`friends/${meId}/${uid}`] = null;
-            updates[`friends/${uid}/${meId}`] = null;
-            await update(ref(db), updates);
-            loadUsers();
-          });
-          actions.appendChild(unfriendBtn);
+          if (status === true) {
+            const msgBtn = document.createElement("button");
+            msgBtn.className = "btn small";
+            msgBtn.textContent = "Message";
+            msgBtn.addEventListener("click", () => openPrivateChat(uid, data));
+            actions.appendChild(msgBtn);
 
-        } else if (status === "pending_sent") {
-          const pending = document.createElement("button");
-          pending.className = "btn small outline";
-          pending.textContent = "Pending";
-          pending.disabled = true;
-          actions.appendChild(pending);
+            const unfriendBtn = document.createElement("button");
+            unfriendBtn.className = "btn small outline";
+            unfriendBtn.textContent = "Unfriend";
+            unfriendBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              if (!confirm("Remove friend?")) return;
+              const updates = {};
+              updates[`friends/${meId}/${uid}`] = null;
+              updates[`friends/${uid}/${meId}`] = null;
+              await update(ref(db), updates);
+              loadUsers();
+            });
+            actions.appendChild(unfriendBtn);
 
-          const cancel = document.createElement("button");
-          cancel.className = "btn small";
-          cancel.textContent = "Cancel";
-          cancel.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!confirm("Cancel friend request?")) return;
-            const updates = {};
-            updates[`friends/${meId}/${uid}`] = null;
-            updates[`friends/${uid}/${meId}`] = null;
-            await update(ref(db), updates);
-            loadUsers();
-          });
-          actions.appendChild(cancel);
+          } else if (status === "pending_sent") {
+            const pending = document.createElement("button");
+            pending.className = "btn small outline";
+            pending.textContent = "Pending";
+            pending.disabled = true;
+            actions.appendChild(pending);
 
-        } else if (status === "pending_incoming") {
-          const accept = document.createElement("button");
-          accept.className = "btn small primary";
-          accept.textContent = "Accept";
-          accept.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const updates = {};
-            updates[`friends/${meId}/${uid}`] = true;
-            updates[`friends/${uid}/${meId}`] = true;
-            await update(ref(db), updates);
-            loadUsers();
-          });
-          actions.appendChild(accept);
+            const cancel = document.createElement("button");
+            cancel.className = "btn small";
+            cancel.textContent = "Cancel";
+            cancel.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              if (!confirm("Cancel friend request?")) return;
+              const updates = {};
+              updates[`friends/${meId}/${uid}`] = null;
+              updates[`friends/${uid}/${meId}`] = null;
+              await update(ref(db), updates);
+              loadUsers();
+            });
+            actions.appendChild(cancel);
 
-          const decline = document.createElement("button");
-          decline.className = "btn small outline";
-          decline.textContent = "Decline";
-          decline.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!confirm("Decline friend request?")) return;
-            const updates = {};
-            updates[`friends/${meId}/${uid}`] = null;
-            updates[`friends/${uid}/${meId}`] = null;
-            await update(ref(db), updates);
-            loadUsers();
-          });
-          actions.appendChild(decline);
+          } else if (status === "pending_incoming") {
+            const accept = document.createElement("button");
+            accept.className = "btn small primary";
+            accept.textContent = "Accept";
+            accept.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              const updates = {};
+              updates[`friends/${meId}/${uid}`] = true;
+              updates[`friends/${uid}/${meId}`] = true;
+              await update(ref(db), updates);
+              loadUsers();
+            });
+            actions.appendChild(accept);
 
-        } else {
-          const add = document.createElement("button");
-          add.className = "btn small primary";
-          add.textContent = "Add Friend";
-          add.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const updates = {};
-            updates[`friends/${meId}/${uid}`] = "pending_sent";
-            updates[`friends/${uid}/${meId}`] = "pending_incoming";
-            await update(ref(db), updates);
-            loadUsers();
-          });
-          actions.appendChild(add);
+            const decline = document.createElement("button");
+            decline.className = "btn small outline";
+            decline.textContent = "Decline";
+            decline.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              if (!confirm("Decline friend request?")) return;
+              const updates = {};
+              updates[`friends/${meId}/${uid}`] = null;
+              updates[`friends/${uid}/${meId}`] = null;
+              await update(ref(db), updates);
+              loadUsers();
+            });
+            actions.appendChild(decline);
+
+          } else {
+            const add = document.createElement("button");
+            add.className = "btn small primary";
+            add.textContent = "Add Friend";
+            add.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              const updates = {};
+              updates[`friends/${meId}/${uid}`] = "pending_sent";
+              updates[`friends/${uid}/${meId}`] = "pending_incoming";
+              await update(ref(db), updates);
+              loadUsers();
+            });
+            actions.appendChild(add);
+          }
+        } catch (err) {
+          console.error("⚠️ friends check error for", uid, err);
         }
-      } catch (err) {
-        console.error("⚠️ friends check error for", uid, err);
-      }
 
-      li.appendChild(actions);
-      userListEl.appendChild(li);
-    });
+        li.appendChild(actions);
+        userListEl.appendChild(li);
+      }
+    })();
   });
 }
 
@@ -594,6 +584,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
