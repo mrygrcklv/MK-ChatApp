@@ -196,14 +196,16 @@ function loadUsers() {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
 
-    // convert children snapshot to array para ma-for..of
+    // create array of plain objects para safe gamitin sa async loop
     const children = [];
-    snap.forEach(child => children.push(child));
+    snap.forEach(child => {
+      children.push({ key: child.key, val: child.val() });
+    });
 
     (async () => {
       for (const child of children) {
         const uid = child.key;
-        const data = child.val();
+        const data = child.val;
 
         if (!data || uid === meId) continue;
 
@@ -584,6 +586,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
