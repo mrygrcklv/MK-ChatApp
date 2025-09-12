@@ -55,6 +55,14 @@
     "groupTyping": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$fid": {
+          ".write": "auth != null && (auth.uid === $uid || auth.uid === $fid)"
+        }
+      }
     }
   }
 }
