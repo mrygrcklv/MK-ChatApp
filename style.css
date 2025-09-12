@@ -490,6 +490,13 @@ html, body {
   padding: 7px 10px;
 }
 
+.chat-image {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
 /* Keyframe animations */
 @keyframes fadeIn {
   from {
@@ -557,3 +564,4 @@ html, body {
     flex-direction: column;
   }
 }
+
