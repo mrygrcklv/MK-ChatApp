@@ -195,19 +195,28 @@ function loadUsers() {
     console.log("📦 Users snapshot raw:", snap.val());
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
+    console.log("👤 Current user UID:", meId);
 
-    // create array of plain objects para safe gamitin sa async loop
     const children = [];
-    snap.forEach(child => {
-      children.push({ key: child.key, val: child.val() });
-    });
+    snap.forEach(child => children.push(child));
 
     (async () => {
       for (const child of children) {
         const uid = child.key;
-        const data = child.val;
+        const data = child.val();
 
-        if (!data || uid === meId) continue;
+        console.log("➡️ Checking user:", uid, data);
+
+        if (!data) {
+          console.log("⏭️ Skip, no data");
+          continue;
+        }
+        if (uid === meId) {
+          console.log("⏭️ Skip self:", uid);
+          continue;
+        }
+
+        console.log("✅ Should render this user:", uid);
 
         const li = document.createElement("li");
         li.className = data.online ? "online" : "offline";
@@ -223,12 +232,16 @@ function loadUsers() {
           </small></div>`;
         li.appendChild(left);
 
-        const actions = document.createElement("div");
-        actions.className = "friend-actions";
+        // Fallback render agad bago pa mag friends-check
+        userListEl.appendChild(li);
 
         try {
           const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
           const status = fSnap.exists() ? fSnap.val() : null;
+          console.log("🤝 Friend status", meId, "→", uid, "=", status);
+
+          const actions = document.createElement("div");
+          actions.className = "friend-actions";
 
           if (status === true) {
             const msgBtn = document.createElement("button");
@@ -257,20 +270,6 @@ function loadUsers() {
             pending.textContent = "Pending";
             pending.disabled = true;
             actions.appendChild(pending);
-
-            const cancel = document.createElement("button");
-            cancel.className = "btn small";
-            cancel.textContent = "Cancel";
-            cancel.addEventListener("click", async (e) => {
-              e.stopPropagation();
-              if (!confirm("Cancel friend request?")) return;
-              const updates = {};
-              updates[`friends/${meId}/${uid}`] = null;
-              updates[`friends/${uid}/${meId}`] = null;
-              await update(ref(db), updates);
-              loadUsers();
-            });
-            actions.appendChild(cancel);
 
           } else if (status === "pending_incoming") {
             const accept = document.createElement("button");
@@ -314,12 +313,11 @@ function loadUsers() {
             });
             actions.appendChild(add);
           }
+
+          li.appendChild(actions);
         } catch (err) {
           console.error("⚠️ friends check error for", uid, err);
         }
-
-        li.appendChild(actions);
-        userListEl.appendChild(li);
       }
     })();
   });
@@ -586,6 +584,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
