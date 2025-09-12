@@ -192,21 +192,115 @@ groupsTab.addEventListener("click", () => {
 function loadUsers() {
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
-    console.log("📦 RAW SNAP:", snap.val());
+    console.log("📦 Users snapshot raw:", snap.val());
     userListEl.innerHTML = "";
+    const meId = currentUser?.uid;
 
-    snap.forEach(child => {
+    snap.forEach(async (child) => {
       const uid = child.key;
       const data = child.val();
-      if (uid === currentUser?.uid) return; // skip sarili
+      if (!data || uid === meId) return;
 
       const li = document.createElement("li");
-      li.textContent = `${uid} — ${data.fullName || data.email}`;
+      li.className = data.online ? "online" : "offline";
+      li.style.display = "flex";
+      li.style.justifyContent = "space-between";
+      li.style.alignItems = "center";
+
+      const displayName = data.fullName || data.email || uid;
+      const left = document.createElement("div");
+      left.innerHTML = `<div>${getFirstName(displayName)} 
+        <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
+      li.appendChild(left);
+
+      const actions = document.createElement("div");
+      actions.className = "friend-actions";
+
+      try {
+        const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
+        const status = fSnap.exists() ? fSnap.val() : null;
+
+        if (status === true) {
+          const msgBtn = document.createElement("button");
+          msgBtn.className = "btn small";
+          msgBtn.textContent = "Message";
+          msgBtn.addEventListener("click", () => openPrivateChat(uid, data));
+          actions.appendChild(msgBtn);
+
+          const unfriendBtn = document.createElement("button");
+          unfriendBtn.className = "btn small outline";
+          unfriendBtn.textContent = "Unfriend";
+          unfriendBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!confirm("Remove friend?")) return;
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = null;
+            updates[`friends/${uid}/${meId}`] = null;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(unfriendBtn);
+
+        } else if (status === "pending_sent") {
+          const pending = document.createElement("button");
+          pending.className = "btn small outline";
+          pending.textContent = "Pending";
+          pending.disabled = true;
+          actions.appendChild(pending);
+
+        } else if (status === "pending_incoming") {
+          const accept = document.createElement("button");
+          accept.className = "btn small primary";
+          accept.textContent = "Accept";
+          accept.addEventListener("click", async () => {
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = true;
+            updates[`friends/${uid}/${meId}`] = true;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(accept);
+
+          const decline = document.createElement("button");
+          decline.className = "btn small outline";
+          decline.textContent = "Decline";
+          decline.addEventListener("click", async () => {
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = null;
+            updates[`friends/${uid}/${meId}`] = null;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(decline);
+
+        } else {
+          const add = document.createElement("button");
+          add.className = "btn small primary";
+          add.textContent = "Add Friend";
+          add.addEventListener("click", async () => {
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = "pending_sent";
+            updates[`friends/${uid}/${meId}`] = "pending_incoming";
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(add);
+        }
+      } catch (err) {
+        console.error("⚠️ friends check error for", uid, err);
+
+        // fallback: Add Friend button para laging lumabas sa list
+        const add = document.createElement("button");
+        add.className = "btn small primary";
+        add.textContent = "Add Friend";
+        actions.appendChild(add);
+      }
+
+      li.appendChild(actions);
       userListEl.appendChild(li);
     });
   });
 }
-
 
 /* open private chat only if friends */
 function openPrivateChat(otherUid, otherData) {
@@ -469,6 +563,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
