@@ -199,13 +199,19 @@ function loadUsers() {
   onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
+    console.log("🔄 loadUsers: currentUser =", meId);
+    console.log("🔄 All users snapshot:", snap.val());
 
     snap.forEach(async (child) => {
       const uid = child.key;
       const data = child.val();
 
-      // skip only if no record or if this is me
-      if (!data || uid === meId) return;
+      if (!data || uid === meId) {
+        console.log("⏭️ Skipped self or empty:", uid);
+        return;
+      }
+
+      console.log("👤 Checking user:", uid, data);
 
       const li = document.createElement("li");
       li.className = data.online ? "online" : "offline";
@@ -213,10 +219,7 @@ function loadUsers() {
       li.style.justifyContent = "space-between";
       li.style.alignItems = "center";
 
-      // fallback to fullName, then email, then UID
-      const displayName =
-        data.fullName || data.email || uid;
-
+      const displayName = data.fullName || data.email || uid;
       const left = document.createElement("div");
       left.innerHTML = `<div>${getFirstName(displayName)} 
         <small style="opacity:.6">
@@ -224,16 +227,16 @@ function loadUsers() {
         </small></div>`;
       li.appendChild(left);
 
-      // container for action buttons
       const actions = document.createElement("div");
       actions.className = "friend-actions";
 
       try {
         const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
         const status = fSnap.exists() ? fSnap.val() : null;
+        console.log(`🤝 Friend status ${meId} -> ${uid}:`, status);
 
         if (status === true) {
-          // already friends -> show "Message" + "Unfriend"
+          // already friends
           const msgBtn = document.createElement("button");
           msgBtn.className = "btn small";
           msgBtn.textContent = "Message";
@@ -257,7 +260,6 @@ function loadUsers() {
           actions.appendChild(unfriendBtn);
 
         } else if (status === "pending_sent") {
-          // I sent a request to them
           const pending = document.createElement("button");
           pending.className = "btn small outline";
           pending.textContent = "Pending";
@@ -279,7 +281,6 @@ function loadUsers() {
           actions.appendChild(cancel);
 
         } else if (status === "pending_incoming") {
-          // they sent me a request -> show Accept / Decline
           const accept = document.createElement("button");
           accept.className = "btn small primary";
           accept.textContent = "Accept";
@@ -308,7 +309,7 @@ function loadUsers() {
           actions.appendChild(decline);
 
         } else {
-          // no relation -> show Add Friend
+          // no relation
           const add = document.createElement("button");
           add.className = "btn small primary";
           add.textContent = "Add Friend";
@@ -323,7 +324,21 @@ function loadUsers() {
           actions.appendChild(add);
         }
       } catch (err) {
-        console.error("friends check error", err);
+        console.error("⚠️ friends check error for", uid, err);
+
+        // fallback: still show Add Friend
+        const add = document.createElement("button");
+        add.className = "btn small primary";
+        add.textContent = "Add Friend";
+        add.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const updates = {};
+          updates[`friends/${meId}/${uid}`] = "pending_sent";
+          updates[`friends/${uid}/${meId}`] = "pending_incoming";
+          await update(ref(db), updates);
+          loadUsers();
+        });
+        actions.appendChild(add);
       }
 
       li.appendChild(actions);
@@ -593,4 +608,5 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
