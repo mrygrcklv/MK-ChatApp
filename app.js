@@ -207,11 +207,13 @@ function loadUsers() {
       li.style.alignItems = "center";
 
       // name + status
-      const displayName = data.fullName || data.email || uid;
       const left = document.createElement("div");
-      left.innerHTML = `<div>${getFirstName(displayName)} 
-        <small style="opacity:.6">${data.online ? "online" : "offline"}</small>
-      </div>`;
+      left.innerHTML = `
+        <div>
+          ${getFirstName(displayName)}
+          <small style="opacity:.6">${data.online ? "online" : "offline"}</small>
+        </div>
+      `;
       li.appendChild(left);
 
       // action buttons
@@ -562,6 +564,7 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
 
 
 
