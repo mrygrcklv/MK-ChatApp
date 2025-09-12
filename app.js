@@ -314,7 +314,7 @@ function loadUsers() {
           decline.textContent = "Decline";
           decline.addEventListener("click", async (e) => {
             e.stopPropagation();
-            if (!confirm("Decline friend request?")) return;
+            if (!confirm("Deline friend request?")) return;
             const updates = {};
             updates[`friends/${meId}/${uid}`] = null;
             updates[`friends/${uid}/${meId}`] = null;
@@ -375,7 +375,6 @@ if (privateImgInput) {
       reader.onloadend = () => {
         selectedPrivateImage = reader.result;
         privateImageName.textContent = file.name;
-        // Make the image info and clear button visible when a file is selected
         privateImageLabel.classList.remove("hidden");
         privateClearImg.style.display = "inline-block";
         checkPrivateSendButtonState();
@@ -387,7 +386,6 @@ if (privateImgInput) {
     selectedPrivateImage = null;
     privateImgInput.value = "";
     privateImageLabel.classList.add("hidden");
-    // Hide the clear button when no image is selected
     privateClearImg.style.display = "none";
     checkPrivateSendButtonState();
   });
@@ -425,7 +423,7 @@ privateInput.addEventListener("input", async () => {
   const chatId = getChatId(currentUser.uid, selectedPrivateUid);
   const val = (privateInput.value || "").trim() !== "";
   await set(ref(db, `privateTyping/${chatId}/${currentUser.uid}`), val);
-  checkPrivateSendButtonState(); // Update send button state on text change
+  checkPrivateSendButtonState();
 });
 
 // New: Listen for Enter key on private message input
@@ -491,8 +489,7 @@ function renderPrivateMessage(msg, key, chatId) {
   if (msg.image) {
     const img = document.createElement("img");
     img.src = msg.image;
-    img.style.maxWidth = "100%";
-    img.style.borderRadius = "10px";
+    img.classList.add("chat-image"); // Add the new CSS class
     wrapper.appendChild(img);
   }
 
@@ -613,7 +610,6 @@ if (groupImgInput) {
       reader.onloadend = () => {
         selectedGroupImage = reader.result;
         groupImageName.textContent = file.name;
-        // Make the image info and clear button visible when a file is selected
         groupImageLabel.classList.remove("hidden");
         groupClearImg.style.display = "inline-block";
         checkGroupSendButtonState();
@@ -625,7 +621,6 @@ if (groupImgInput) {
     selectedGroupImage = null;
     groupImgInput.value = "";
     groupImageLabel.classList.add("hidden");
-    // Hide the clear button when no image is selected
     groupClearImg.style.display = "none";
     checkGroupSendButtonState();
   });
@@ -665,7 +660,7 @@ groupInput.addEventListener("input", async () => {
   if (!currentUser || !selectedGroupId) return;
   const v = (groupInput.value || "").trim() !== "";
   await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), v);
-  checkGroupSendButtonState(); // Update send button state on text change
+  checkGroupSendButtonState();
 });
 
 // New: Listen for Enter key on group message input
@@ -695,8 +690,7 @@ function renderGroupMessage(m, gid, messageKey) {
   if (m.image) {
     const img = document.createElement("img");
     img.src = m.image;
-    img.style.maxWidth = "100%";
-    img.style.borderRadius = "10px";
+    img.classList.add("chat-image"); // Add the new CSS class
     wrapper.appendChild(img);
   }
 
