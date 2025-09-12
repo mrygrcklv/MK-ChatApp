@@ -38,12 +38,15 @@ html,body{
 }
 .center-card input:focus{box-shadow:0 6px 18px rgba(127,201,168,0.12); border-color:var(--accent-1);}
 .auth-actions{display:flex; gap:8px; justify-content:center; margin-top:10px;}
-.btn{border:none; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600;
-  transition:transform .08s ease, box-shadow .12s ease;}
+.btn{
+  border:none; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600;
+  transition: all .15s ease;
+}
 .btn.small{padding:7px 10px; font-size:13px}
 .btn.primary{ background: linear-gradient(135deg,var(--accent-1), #4fab84); color:#fff;}
-.btn.outline{ background:transparent; border:1px solid rgba(17,24,39,0.06); color:var(--muted);}
-.btn:active{ transform:translateY(1px)}
+.btn.outline{ background:transparent; border:1px solid rgba(17,24,39,0.12); color:var(--muted);}
+.btn:hover{ transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,0.12);}
+.btn:active{ transform:translateY(1px); }
 
 /* App layout */
 .app-root{ min-height:100vh; display:flex; flex-direction:column;}
@@ -68,18 +71,21 @@ html,body{
 /* Lists */
 .list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;}
 .list li{ padding:10px 12px; border-radius:10px; cursor:pointer; background:#fefefe;
-  display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  display:flex; justify-content:space-between; align-items:center; gap:8px; transition: background .15s ease;}
+.list li:hover{ background:#f2f9ff; }
 .list li.online{ border-left:4px solid var(--accent-1); }
 .list li.offline{ opacity:.86; color:#6b7280 }
 
 /* Chat area */
 #chat-area{ flex:1; display:flex; flex-direction:column; gap:12px; }
-#conversations{ display:flex; width:100%; height:100%;}
-.panel{ flex:1; display:none; flex-direction:column; background:#fff; border-radius:12px; padding:14px;}
-.panel-head{ border-bottom:1px solid rgba(10,20,30,0.04); padding-bottom:8px; margin-bottom:10px;
+#conversations{ display:flex; width:100%; height:100%; gap:12px; }
+.panel{ flex:1; display:none; flex-direction:column; background:#fff; border-radius:12px; padding:14px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.05); border:2px solid transparent; transition: all .2s ease;}
+.panel.active{ display:flex; border-color: var(--accent-2); box-shadow:0 6px 18px rgba(0,0,0,0.1);}
+.panel-head{ border-bottom:1px solid rgba(10,20,30,0.08); padding-bottom:8px; margin-bottom:10px;
   display:flex; align-items:center; justify-content:space-between;}
 .messages{ flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding:8px;}
-.input-row{ display:flex; gap:10px; padding-top:8px; border-top:1px solid rgba(10,20,30,0.03);}
+.input-row{ display:flex; gap:10px; padding-top:8px; border-top:1px solid rgba(10,20,30,0.08);}
 .input-row input{ flex:1; padding:12px; border-radius:10px; border:1px solid rgba(124,179,155,0.18); background:#fbfffe;}
 .typing{ font-size:13px; color:#4b5563; margin:6px 0 0 4px; }
 
@@ -89,10 +95,16 @@ html,body{
 .msg.receiver{ background: #f0f7ff; color:#052b1a; align-self:flex-start; border-bottom-left-radius:6px;}
 .meta{ font-size:12px; color:#555; margin-top:6px; text-align:right; }
 
+/* Modal */
 .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;}
 .modal.hidden { display: none; }
-.modal-content { background: #fff; padding: 20px; border-radius: 12px; width: clamp(300px, 50%, 500px);}
-.modal-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end;}
+.modal-content { background: #fff; padding: 24px; border-radius: 16px; width: clamp(320px, 50%, 480px); box-shadow:0 10px 30px rgba(0,0,0,0.15);}
+.modal-content h2{ margin-top:0; margin-bottom:14px; font-size:20px; color:#222; }
+.modal-content input{ width:100%; padding:12px; margin:10px 0; border-radius:10px; border:1px solid #ddd; }
+.modal-content input:focus{ border-color: var(--accent-2); outline:none; box-shadow:0 0 0 2px rgba(127,184,224,0.2);}
+.modal-actions { margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;}
+.modal-close { background:none; border:none; font-size:20px; cursor:pointer; position:absolute; right:20px; top:16px; color:#888; }
+.modal-close:hover{ color:#333; }
 
 /* Add Friend & Requests */
 .friend-actions { display:flex; gap:6px; }
@@ -103,6 +115,3 @@ html,body{
   #sidebar{ width:100%; order:2; }
   #conversations{ order:1; flex-direction:column; }
 }
-
-
-
