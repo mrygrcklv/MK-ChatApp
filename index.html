@@ -1,125 +1,559 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>MK Chat App</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
-  <link href="https://fonts.googleapis.com/css?family=Inter:400,500,700&display=swap" rel="stylesheet">
-</head>
-<body>
-  <div id="auth-section" class="center-card">
-    <h2 class="brand">Welcome to MK Chat</h2>
-    <input type="text" id="fullname" placeholder="Full name">
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Password">
-    <div class="auth-actions">
-      <button id="signup-btn" class="btn primary">Sign Up</button>
-      <button id="login-btn" class="btn outline">Login</button>
-    </div>
-  </div>
+:root {
+  --bg1: #F8F4E3;
+  --bg2: #E6D8B0;
+  --accent-1: #C69F6C;
+  --accent-2: #E6D8B0;
+  --muted: #594E48;
+  --card: #ffffff;
+  --radius: 10px;
+  --gap: 12px;
+}
 
-  <div id="chat-section" class="app-root" style="display:none;">
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="brand-small">MK Chat</div>
-        <div class="user-info">Hello, <span id="user-name"></span></div>
-      </div>
-      <div class="topbar-right">
-        <button id="logout-btn" class="btn small">Logout</button>
-      </div>
-    </header>
+* {
+  box-sizing: border-box;
+}
 
-    <div class="container">
-      <aside id="sidebar">
-        <div class="sidebar-tabs">
-          <button id="users-tab" class="tab active">Users</button>
-          <button id="groups-tab" class="tab">Groups</button>
-        </div>
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Times New Roman', Times, serif;
+  background-color: var(--bg1);
+  color: var(--muted);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: auto;
+}
 
-        <div id="users-list-container" class="list-container">
-          <h4 class="sidebar-title">All users</h4>
-          <ul id="user-list" class="list"></ul>
-        </div>
+/* Centered auth card responsive */
+.center-card {
+  width: clamp(300px, 36vw, 420px);
+  margin: 6vh auto;
+  padding: 24px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  animation: fadeIn 0.8s ease-out;
+  transition: transform .3s ease, box-shadow .3s ease;
+}
 
-        <div id="groups-list-container" class="list-container hidden">
-          <h4 class="sidebar-title">Your groups</h4>
-          <ul id="group-list" class="list"></ul>
-          <button id="open-create-group" class="btn small outline">Create Group</button>
-          <div class="group-forms">
-            <input id="join-group-id" placeholder="Join by Group ID">
-            <button id="join-group-btn" class="btn small primary">Join</button>
-          </div>
-        </div>
-      </aside>
+.center-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
 
-      <main id="chat-area">
-        <section id="conversations">
-          <div id="private-panel" class="panel">
-            <div class="panel-head">
-              <h3>Private — <span id="chatting-with">Nobody</span></h3>
-            </div>
-            <div id="private-messages" class="messages"></div>
-            <div class="input-row">
-              <div id="private-image-selected-label" class="selected-label hidden">
-                <span id="private-image-name"></span>
-                <button id="private-clear-img" class="clear-btn">✕</button>
-              </div>
-              <input id="private-input" placeholder="Message someone...">
-              <label for="private-img-input" class="btn outline small">🖼️</label>
-              <input type="file" id="private-img-input" accept="image/*" class="hidden-input">
-              <button id="private-send" class="btn primary" disabled>Send</button>
-            </div>
-          </div>
+.brand {
+  color: var(--accent-1);
+  margin: 6px 0 16px;
+  font-weight: 700;
+  font-size: 24px;
+  font-family: 'Times New Roman', Times, serif;
+}
 
-          <div id="group-panel" class="panel">
-            <div class="panel-head">
-              <h3>Group — <span id="current-group">None</span></h3>
-              <button id="manage-members-btn" class="btn small outline">Members</button>
-            </div>
-            <div id="group-messages" class="messages"></div>
-            <div id="group-typing" class="typing"></div>
-            <div class="input-row">
-              <div id="group-image-selected-label" class="selected-label hidden">
-                <span id="group-image-name"></span>
-                <button id="group-clear-img" class="clear-btn">✕</button>
-              </div>
-              <input id="group-input" placeholder="Message group...">
-              <label for="group-img-input" class="btn outline small">🖼️</label>
-              <input type="file" id="group-img-input" accept="image/*" class="hidden-input">
-              <button id="group-send" class="btn primary" disabled>Send</button>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
-  </div>
+.center-card input {
+  width: 100%;
+  padding: 12px 14px;
+  margin: 10px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg2);
+  background: var(--card);
+  outline: none;
+  transition: box-shadow .2s, border-color .2s;
+}
 
-  <div id="group-modal" class="modal hidden">
-    <div class="modal-content">
-      <button id="create-group-cancel" class="modal-close">&times;</button>
-      <h2>Create Group</h2>
-      <input id="modal-group-name" type="text" placeholder="Group name">
-      <div id="friends-list"></div>
-      <div class="modal-footer">
-        <button id="create-group-confirm" class="btn primary">Create</button>
-      </div>
-    </div>
-  </div>
+.center-card input:focus {
+  box-shadow: 0 0 0 3px var(--bg2);
+  border-color: var(--accent-1);
+}
 
-  <div id="members-modal" class="modal hidden">
-    <div class="modal-content">
-      <button id="members-cancel" class="modal-close">&times;</button>
-      <h2>Group Members</h2>
-      <div id="members-list"></div>
-      <h3 style="margin-top:16px;">Add from Friends</h3>
-      <div id="add-members-list"></div>
-      <div class="modal-footer">
-        <button id="close-members-modal" class="btn primary">Close</button>
-      </div>
-    </div>
-  </div>
+.auth-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 12px;
+}
 
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+.btn {
+  border: none;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform .15s ease, box-shadow .2s ease, background-color .2s;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.btn.small {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.btn.primary {
+  background: var(--accent-1);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(198, 159, 108, 0.4);
+}
+
+.btn.primary:hover {
+  background: #a88457;
+}
+
+.btn.outline {
+  background: transparent;
+  border: 1px solid var(--accent-1);
+  color: var(--accent-1);
+}
+
+.btn.outline:hover {
+  background: var(--accent-1);
+  color: #fff;
+}
+
+.btn:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.btn[disabled] {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* App layout */
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background-color: var(--accent-2);
+  color: var(--muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-bottom: 2px solid var(--accent-1);
+  transition: all 0.3s ease;
+}
+
+.topbar .brand-small {
+  font-weight: 700;
+  margin-right: 18px;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.topbar .user-info {
+  opacity: .95;
+}
+
+.container {
+  display: flex;
+  gap: 20px;
+  padding: 24px;
+  align-items: stretch;
+  height: calc(100vh - 80px);
+}
+
+/* Sidebar */
+#sidebar {
+  width: 300px;
+  min-width: 260px;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  animation: slideInLeft 0.5s ease-out;
+}
+
+.sidebar-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sidebar-tabs .tab {
+  flex: 1;
+  background: transparent;
+  border-radius: var(--radius);
+  padding: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  transition: background-color .2s, border-color .2s;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.sidebar-tabs .tab.active {
+  background: var(--bg1);
+  border-color: var(--accent-1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  color: var(--accent-1);
+}
+
+.sidebar-tabs .tab:not(.active):hover {
+  background: #f8f8f8;
+}
+
+.list-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.hidden {
+  display: none;
+}
+
+.hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sidebar-title {
+  margin: 8px 6px 12px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* lists */
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list li {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--bg1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+  transition: transform .2s ease-out, box-shadow .2s;
+}
+
+.list li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
+}
+
+.list li.online {
+  border-left: 4px solid var(--accent-1);
+}
+
+.list li.offline {
+  opacity: .8;
+  color: var(--muted);
+}
+
+/* group forms */
+.group-forms {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group-forms input {
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg2);
+  background: var(--card);
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Chat area */
+#chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#conversations {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  height: 100%;
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  min-width: 200px;
+  min-height: 0;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.panel-head {
+  border-bottom: 1px solid var(--bg2);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.messages {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg2);
+  position: relative;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg2);
+  background: var(--card);
+}
+
+.typing {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 8px 0 0 4px;
+  animation: pulse 1.5s infinite;
+}
+
+.selected-label {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  font-size: 13px;
+  background-color: var(--bg2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  animation: slideInDown .3s;
+}
+
+.clear-btn {
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+/* message bubbles */
+.msg {
+  max-width: 68%;
+  padding: 14px 18px;
+  border-radius: 16px;
+  line-height: 1.4;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  animation: messagePop 0.3s ease-out;
+}
+
+.msg.sender {
+  background: var(--accent-1);
+  color: #fff;
+  align-self: flex-end;
+  border-bottom-right-radius: 6px;
+}
+
+.msg.receiver {
+  background: var(--bg2);
+  color: var(--muted);
+  align-self: flex-start;
+  border-bottom-left-radius: 6px;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  text-align: right;
+}
+
+.msg.sender .meta {
+  color: #fff;
+  opacity: 0.8;
+}
+
+/* modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 28px;
+  border-radius: 16px;
+  width: clamp(320px, 50%, 480px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  animation: popIn 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 24px;
+  color: var(--muted);
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg2);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  position: absolute;
+  right: 20px;
+  top: 16px;
+  color: var(--muted);
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-actions button {
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes messagePop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 980px) {
+  .container {
+    flex-direction: column;
+    padding: 12px;
+    height: auto;
+  }
+  #sidebar {
+    width: 100%;
+    order: 2;
+  }
+  #conversations {
+    order: 1;
+    flex-direction: column;
+  }
+}
