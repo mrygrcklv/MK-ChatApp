@@ -67,7 +67,7 @@ const groupTyping = document.getElementById("group-typing");
 const privatePanel = document.getElementById("private-panel");
 const groupPanel = document.getElementById("group-panel");
 
-/* group modal elements (must exist in your HTML) */
+/* group modal elements (must match index.html) */
 const openCreateGroupBtn = document.getElementById("open-create-group");
 const groupModal = document.getElementById("group-modal");
 const groupNameInput = document.getElementById("modal-group-name");
@@ -180,44 +180,145 @@ groupsTab.addEventListener("click", () => {
   loadUserGroups();
 });
 
-/* ---------- FRIENDS + USERS ---------- */
+/* ---------- FRIENDS + USERS (with request states) ---------- */
+/*
+  friends path semantics used here (fits current database.rules.json):
+  - friends/{userA}/{userB} can be:
+      true                => confirmed friend
+      "pending_sent"      => userA has SENT a request to userB (userA sees "Pending")
+      "pending_incoming"  => userA has an INCOMING request from userB (userA sees Accept/Decline)
+  We write both sides when sending request:
+    friends/{from}/{to} = "pending_sent"
+    friends/{to}/{from} = "pending_incoming"
+  Accepting sets both sides to true.
+  Declining removes both sides.
+*/
+
 function loadUsers() {
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
-    snap.forEach(child => {
+    snap.forEach(async (child) => {
       const uid = child.key;
       const data = child.val();
       if (!data || !data.email || uid === meId) return;
 
       const li = document.createElement("li");
       li.className = data.online ? "online" : "offline";
-      li.innerHTML = `<div>${getFirstName(data.fullName || data.email)} <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
+      li.style.display = "flex";
+      li.style.justifyContent = "space-between";
+      li.style.alignItems = "center";
 
-      // check if already friends; if friend -> clicking opens chat; else show Add Friend button
-      get(ref(db, `friends/${meId}/${uid}`)).then(fSnap => {
-        if (fSnap.exists()) {
-          li.addEventListener("click", () => openPrivateChat(uid, data));
-        } else {
-          const btn = document.createElement("button");
-          btn.textContent = "Add Friend";
-          btn.className = "btn small outline";
-          btn.addEventListener("click", async (e) => {
+      const left = document.createElement("div");
+      left.innerHTML = `<div>${getFirstName(data.fullName || data.email)} <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
+      li.appendChild(left);
+
+      // container for action buttons
+      const actions = document.createElement("div");
+      actions.className = "friend-actions";
+
+      try {
+        const fSnap = await get(ref(db, `friends/${meId}/${uid}`));
+        const status = fSnap.exists() ? fSnap.val() : null;
+
+        if (status === true) {
+          // already friends -> clicking opens chat (also show message icon)
+          const msgBtn = document.createElement("button");
+          msgBtn.className = "btn small";
+          msgBtn.textContent = "Message";
+          msgBtn.addEventListener("click", () => openPrivateChat(uid, data));
+          actions.appendChild(msgBtn);
+
+          const unfriendBtn = document.createElement("button");
+          unfriendBtn.className = "btn small outline";
+          unfriendBtn.textContent = "Unfriend";
+          unfriendBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            // create bidirectional friendship
+            if (!confirm("Remove friend?")) return;
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = null;
+            updates[`friends/${uid}/${meId}`] = null;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(unfriendBtn);
+        } else if (status === "pending_sent") {
+          // I sent a request to them
+          const pending = document.createElement("button");
+          pending.className = "btn small outline";
+          pending.textContent = "Pending";
+          pending.disabled = true;
+          actions.appendChild(pending);
+
+          const cancel = document.createElement("button");
+          cancel.className = "btn small";
+          cancel.textContent = "Cancel";
+          cancel.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!confirm("Cancel friend request?")) return;
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = null;
+            updates[`friends/${uid}/${meId}`] = null;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(cancel);
+        } else if (status === "pending_incoming") {
+          // they sent me a request -> show Accept / Decline
+          const accept = document.createElement("button");
+          accept.className = "btn small primary";
+          accept.textContent = "Accept";
+          accept.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            // make them mutual friends
             const updates = {};
             updates[`friends/${meId}/${uid}`] = true;
             updates[`friends/${uid}/${meId}`] = true;
             await update(ref(db), updates);
             loadUsers();
           });
-          li.appendChild(btn);
-        }
-      }).catch(err => {
-        console.error("friends check error", err);
-      });
+          actions.appendChild(accept);
 
+          const decline = document.createElement("button");
+          decline.className = "btn small outline";
+          decline.textContent = "Decline";
+          decline.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!confirm("Decline friend request?")) return;
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = null;
+            updates[`friends/${uid}/${meId}`] = null;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(decline);
+        } else {
+          // no relation -> show Add Friend
+          const add = document.createElement("button");
+          add.className = "btn small primary";
+          add.textContent = "Add Friend";
+          add.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            // write pending markers on both sides
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = "pending_sent";
+            updates[`friends/${uid}/${meId}`] = "pending_incoming";
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          actions.appendChild(add);
+        }
+      } catch (err) {
+        console.error("friends check error", err);
+        const fallbackBtn = document.createElement("button");
+        fallbackBtn.className = "btn small";
+        fallbackBtn.textContent = "Add Friend";
+        fallbackBtn.addEventListener("click", () => alert("Try again."));
+        actions.appendChild(fallbackBtn);
+      }
+
+      li.appendChild(actions);
       userListEl.appendChild(li);
     });
   });
@@ -301,15 +402,23 @@ if (openCreateGroupBtn) {
   openCreateGroupBtn.addEventListener("click", async () => {
     groupModal.classList.remove("hidden");
     friendsListEl.innerHTML = "";
+
+    // populate only confirmed friends
     const snap = await get(ref(db, `friends/${currentUser.uid}`));
     if (snap.exists()) {
-      const friends = Object.keys(snap.val());
-      // get friend display names (optional)
-      for (const fid of friends) {
+      const friendsObj = snap.val();
+      const friendIds = Object.keys(friendsObj).filter(fid => friendsObj[fid] === true);
+      if (friendIds.length === 0) {
+        friendsListEl.innerHTML = "<p>No friends to add.</p>";
+        return;
+      }
+
+      for (const fid of friendIds) {
         const uSnap = await get(ref(db, `users/${fid}`));
         const display = uSnap.exists() ? (uSnap.val().fullName || uSnap.val().email) : fid;
         const row = document.createElement("div");
         row.className = "friend-row";
+        row.style.margin = "8px 0";
         row.innerHTML = `<label style="display:flex; align-items:center; gap:8px"><input type="checkbox" value="${fid}"> <span>${getFirstName(display)}</span></label>`;
         friendsListEl.appendChild(row);
       }
