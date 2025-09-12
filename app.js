@@ -15,7 +15,8 @@ import {
   onValue,
   onChildAdded,
   serverTimestamp,
-  get
+  get,
+  remove
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
 /* ---------- firebase config ---------- */
@@ -53,8 +54,6 @@ const userListEl = document.getElementById("user-list");
 const groupListEl = document.getElementById("group-list");
 const newGroupNameInput = document.getElementById("new-group-name");
 const createGroupBtn = document.getElementById("create-group-btn");
-const joinGroupInput = document.getElementById("join-group-id");
-const joinGroupBtn = document.getElementById("join-group-btn");
 
 const chattingWith = document.getElementById("chatting-with");
 const privateMessages = document.getElementById("private-messages");
@@ -66,6 +65,9 @@ const groupMessages = document.getElementById("group-messages");
 const groupInput = document.getElementById("group-input");
 const groupSend = document.getElementById("group-send");
 const groupTyping = document.getElementById("group-typing");
+
+const privatePanel = document.getElementById("private-panel");
+const groupPanel = document.getElementById("group-panel");
 
 /* ---------- state ---------- */
 let currentUser = null;
@@ -126,7 +128,7 @@ onAuthStateChanged(auth, (user) => {
     userEmail.textContent = user.email;
     loadUsers();
     loadUserGroups();
-    listenGroupTyping(); // global group typing watcher
+    listenGroupTyping();
   } else {
     authSection.style.display = "block";
     chatSection.style.display = "none";
@@ -144,6 +146,8 @@ function resetUI() {
   selectedGroupId = null;
   selectedPrivateUid = null;
   groupTyping.textContent = "";
+  privatePanel.style.display = "none";
+  groupPanel.style.display = "none";
 }
 
 /* ---------- sidebar tabs ---------- */
@@ -159,7 +163,7 @@ groupsTab.addEventListener("click", () => {
   usersTab.classList.remove("active");
   groupsListContainer.classList.remove("hidden");
   usersListContainer.classList.add("hidden");
-  loadUserGroups(); // refresh when opening groups tab
+  loadUserGroups();
 });
 
 /* ---------- USERS (private chat) ---------- */
@@ -197,11 +201,11 @@ function openPrivateChat(otherUid, otherData) {
   chattingWith.textContent = getFirstName(otherData.fullName || otherData.email);
   selectedGroupId = null;
   currentGroupEl.textContent = "None";
-  // load chat messages
+  privatePanel.style.display = "flex";
+  groupPanel.style.display = "none";
   loadPrivateMessages(otherUid);
 }
 
-/* private send */
 privateSend.addEventListener("click", async () => {
   const text = privateInput.value.trim();
   if (!text || !selectedPrivateUid || !currentUser) return;
@@ -215,36 +219,32 @@ privateSend.addEventListener("click", async () => {
     read: false
   });
   privateInput.value = "";
-  // clear typing indicator
   await set(ref(db, `privateTyping/${chatId}/${currentUser.uid}`), false);
 });
 
-/* listen private messages for the chat */
 function loadPrivateMessages(otherUid) {
   if (!currentUser) return;
   privateMessages.innerHTML = "";
   const chatId = getChatId(currentUser.uid, otherUid);
   const refChats = ref(db, `privateChats/${chatId}`);
-  // use onChildAdded so new messages append
   onChildAdded(refChats, (snap) => {
     const m = snap.val();
     renderPrivateMessage(m);
-    // mark read if receiver
     if (m.senderUid !== currentUser.uid && m.read === false) {
       set(ref(db, `privateChats/${chatId}/${snap.key}/read`), true);
     }
   });
-  // typing indicator for private
   onValue(ref(db, `privateTyping/${chatId}`), (snap) => {
     const data = snap.val() || {};
     const otherTyping = Object.keys(data).some(uid => uid !== currentUser.uid && data[uid]);
-    const small = document.createElement("div");
-    small.className = "typing";
-    small.textContent = otherTyping ? "They are typing..." : "";
-    // remove old then append
     const existing = privateMessages.querySelector(".typing");
     if (existing) existing.remove();
-    if (otherTyping) privateMessages.appendChild(small);
+    if (otherTyping) {
+      const small = document.createElement("div");
+      small.className = "typing";
+      small.textContent = "They are typing...";
+      privateMessages.appendChild(small);
+    }
   });
 }
 
@@ -260,7 +260,6 @@ function renderPrivateMessage(msg) {
   privateMessages.scrollTop = privateMessages.scrollHeight;
 }
 
-/* typing for private */
 privateInput.addEventListener("input", async () => {
   if (!currentUser || !selectedPrivateUid) return;
   const chatId = getChatId(currentUser.uid, selectedPrivateUid);
@@ -274,16 +273,13 @@ createGroupBtn.addEventListener("click", async () => {
   const name = newGroupNameInput.value.trim();
   if (!name) return alert("Enter a group name");
   try {
-    // create group with push to get unique key
     const gRef = push(ref(db, "groupChats"));
     const gid = gRef.key;
-    // initial group meta and add creator as member
     await set(ref(db, `groupChats/${gid}`), {
       name,
       creator: currentUser.uid,
       createdAt: Date.now()
     });
-    // mark membership and userGroups/groupsByCreator
     await set(ref(db, `groupChats/${gid}/members/${currentUser.uid}`), true);
     await set(ref(db, `userGroups/${currentUser.uid}/${gid}`), true);
     await set(ref(db, `groupsByCreator/${currentUser.uid}/${gid}`), true);
@@ -295,24 +291,6 @@ createGroupBtn.addEventListener("click", async () => {
   }
 });
 
-joinGroupBtn.addEventListener("click", async () => {
-  if (!currentUser) return alert("Login first");
-  const gid = joinGroupInput.value.trim();
-  if (!gid) return alert("Enter group ID");
-  try {
-    const snap = await get(ref(db, `groupChats/${gid}`));
-    if (!snap.exists()) return alert("Group not found");
-    // set membership & userGroups
-    await set(ref(db, `groupChats/${gid}/members/${currentUser.uid}`), true);
-    await set(ref(db, `userGroups/${currentUser.uid}/${gid}`), true);
-    joinGroupInput.value = "";
-    loadUserGroups();
-  } catch (err) {
-    console.error(err);
-    alert("Could not join group");
-  }
-});
-
 async function loadUserGroups() {
   if (!currentUser) return;
   groupListEl.innerHTML = "";
@@ -320,57 +298,57 @@ async function loadUserGroups() {
   const ids = snap.exists() ? Object.keys(snap.val()) : [];
   if (ids.length === 0) {
     const li = document.createElement("li");
-    li.textContent = "No groups yet. Create or join one.";
+    li.textContent = "No groups yet. Create one.";
     groupListEl.appendChild(li);
     return;
   }
   for (const gid of ids) {
-    // fetch group name
     const gSnap = await get(ref(db, `groupChats/${gid}/name`));
     const display = gSnap.exists() ? gSnap.val() : gid;
     const li = document.createElement("li");
     li.textContent = display;
     li.addEventListener("click", () => selectGroup(gid, display));
-    // small copy id button
-    const b = document.createElement("button");
-    b.textContent = "ID";
-    b.className = "btn small outline";
-    b.addEventListener("click", (e) => {
+
+    const menu = document.createElement("button");
+    menu.textContent = "⋮";
+    menu.className = "btn small outline";
+    menu.addEventListener("click", async (e) => {
       e.stopPropagation();
-      navigator.clipboard?.writeText(gid).then(()=> alert("Group ID copied"));
+      if (confirm("Leave this group?")) {
+        await remove(ref(db, `groupChats/${gid}/members/${currentUser.uid}`));
+        await remove(ref(db, `userGroups/${currentUser.uid}/${gid}`));
+        loadUserGroups();
+        resetUI();
+      }
     });
-    li.appendChild(b);
+    li.appendChild(menu);
+
     groupListEl.appendChild(li);
   }
 }
 
-/* select group and load messages */
 async function selectGroup(gid, displayName) {
   if (!currentUser) return;
-  // confirm membership
   const memberSnap = await get(ref(db, `groupChats/${gid}/members/${currentUser.uid}`));
   if (!memberSnap.exists()) return alert("You are not a member of that group.");
   selectedGroupId = gid;
   currentGroupEl.textContent = displayName || gid;
-  // clear messages
+  privatePanel.style.display = "none";
+  groupPanel.style.display = "flex";
   groupMessages.innerHTML = "";
-  // listen messages via onChildAdded
   onChildAdded(ref(db, `groupChats/${gid}/messages`), (snap) => {
     const m = snap.val();
     renderGroupMessage(m, gid, snap.key);
-    // if not sender, mark read
     if (m.senderUid !== currentUser.uid) {
       set(ref(db, `groupChats/${gid}/messages/${snap.key}/readBy/${currentUser.uid}`), true);
     }
   });
 }
 
-/* send group message */
 groupSend.addEventListener("click", async () => {
   if (!currentUser || !selectedGroupId) return alert("Select a group first.");
   const text = groupInput.value.trim();
   if (!text) return;
-  // verify membership server-side path exists (defensive)
   const mem = await get(ref(db, `groupChats/${selectedGroupId}/members/${currentUser.uid}`));
   if (!mem.exists()) return alert("You are not a member of this group.");
   const mRef = push(ref(db, `groupChats/${selectedGroupId}/messages`));
@@ -382,18 +360,15 @@ groupSend.addEventListener("click", async () => {
     readBy: {}
   });
   groupInput.value = "";
-  // clear typing
   await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), false);
 });
 
-/* render group message */
 function renderGroupMessage(m, gid, messageKey) {
   const wrapper = document.createElement("div");
   wrapper.className = m.senderUid === currentUser.uid ? "msg sender" : "msg receiver";
   wrapper.textContent = m.text;
   const meta = document.createElement("div");
   meta.className = "meta";
-  // build read indicator (for sender)
   if (m.senderUid === currentUser.uid) {
     const readers = m.readBy ? Object.keys(m.readBy).filter(u=>u!==currentUser.uid) : [];
     meta.textContent = `${formatTime(m.ts)} • ${readers.length ? `Viewed (${readers.length})` : 'Sent'}`;
@@ -405,28 +380,22 @@ function renderGroupMessage(m, gid, messageKey) {
   groupMessages.scrollTop = groupMessages.scrollHeight;
 }
 
-/* group typing indicator writes */
 groupInput.addEventListener("input", async () => {
   if (!currentUser || !selectedGroupId) return;
   const v = groupInput.value.trim() !== "";
   await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), v);
 });
 
-/* global listener to show who is typing across groups you are in */
 function listenGroupTyping() {
-  // watch whole groupTyping node and filter for groups you are in
   onValue(ref(db, `groupTyping`), async (snap) => {
     const data = snap.val() || {};
-    // gather typing people from groups where currentUser is member
     const typingNames = [];
     for (const gid of Object.keys(data)) {
       const groupTypingObj = data[gid] || {};
       for (const uid of Object.keys(groupTypingObj)) {
         if (groupTypingObj[uid] && uid !== currentUser?.uid) {
-          // verify membership quickly
           const member = await get(ref(db, `groupChats/${gid}/members/${uid}`));
           if (member.exists()) {
-            // get display name
             const uSnap = await get(ref(db, `users/${uid}`));
             if (uSnap.exists()) typingNames.push(getFirstName(uSnap.val().fullName || uSnap.val().email));
           }
@@ -437,7 +406,7 @@ function listenGroupTyping() {
   });
 }
 
-/* ---------- helper utils ---------- */
+/* ---------- utils ---------- */
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
