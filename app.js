@@ -44,7 +44,7 @@ const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
 const authSection = document.getElementById("auth-section");
 const chatSection = document.getElementById("chat-section");
-const userEmail = document.getElementById("user-email");
+const userNameSpan = document.getElementById("user-name");
 
 const usersTab = document.getElementById("users-tab");
 const groupsTab = document.getElementById("groups-tab");
@@ -52,8 +52,6 @@ const usersListContainer = document.getElementById("users-list-container");
 const groupsListContainer = document.getElementById("groups-list-container");
 const userListEl = document.getElementById("user-list");
 const groupListEl = document.getElementById("group-list");
-const newGroupNameInput = document.getElementById("new-group-name");
-const createGroupBtn = document.getElementById("create-group-btn");
 
 const chattingWith = document.getElementById("chatting-with");
 const privateMessages = document.getElementById("private-messages");
@@ -68,6 +66,14 @@ const groupTyping = document.getElementById("group-typing");
 
 const privatePanel = document.getElementById("private-panel");
 const groupPanel = document.getElementById("group-panel");
+
+/* group modal elements (must exist in your HTML) */
+const openCreateGroupBtn = document.getElementById("open-create-group");
+const groupModal = document.getElementById("group-modal");
+const groupNameInput = document.getElementById("modal-group-name");
+const friendsListEl = document.getElementById("friends-list");
+const groupCreateConfirm = document.getElementById("create-group-confirm");
+const groupCreateCancel = document.getElementById("create-group-cancel");
 
 /* ---------- state ---------- */
 let currentUser = null;
@@ -126,12 +132,12 @@ onAuthStateChanged(auth, async (user) => {
     authSection.style.display = "none";
     chatSection.style.display = "block";
 
-    // fetch fullName from DB
+    // show display name
     const snap = await get(ref(db, `users/${user.uid}`));
     if (snap.exists() && snap.val().fullName) {
-      document.getElementById("user-name").textContent = snap.val().fullName;
+      userNameSpan.textContent = snap.val().fullName;
     } else {
-      document.getElementById("user-name").textContent = user.email;
+      userNameSpan.textContent = user.email;
     }
 
     loadUsers();
@@ -174,36 +180,50 @@ groupsTab.addEventListener("click", () => {
   loadUserGroups();
 });
 
-/* ---------- USERS (private chat) ---------- */
+/* ---------- FRIENDS + USERS ---------- */
 function loadUsers() {
   const usersRef = ref(db, "users");
   onValue(usersRef, (snap) => {
     userListEl.innerHTML = "";
     const meId = currentUser?.uid;
-    let found = false;
     snap.forEach(child => {
       const uid = child.key;
       const data = child.val();
-      if (!data || !data.email) return;
-      if (uid === meId) return;
-      found = true;
+      if (!data || !data.email || uid === meId) return;
+
       const li = document.createElement("li");
       li.className = data.online ? "online" : "offline";
       li.innerHTML = `<div>${getFirstName(data.fullName || data.email)} <small style="opacity:.6">${data.online ? "online" : "offline"}</small></div>`;
-      li.addEventListener("click", () => {
-        openPrivateChat(uid, data);
+
+      // check if already friends; if friend -> clicking opens chat; else show Add Friend button
+      get(ref(db, `friends/${meId}/${uid}`)).then(fSnap => {
+        if (fSnap.exists()) {
+          li.addEventListener("click", () => openPrivateChat(uid, data));
+        } else {
+          const btn = document.createElement("button");
+          btn.textContent = "Add Friend";
+          btn.className = "btn small outline";
+          btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            // create bidirectional friendship
+            const updates = {};
+            updates[`friends/${meId}/${uid}`] = true;
+            updates[`friends/${uid}/${meId}`] = true;
+            await update(ref(db), updates);
+            loadUsers();
+          });
+          li.appendChild(btn);
+        }
+      }).catch(err => {
+        console.error("friends check error", err);
       });
+
       userListEl.appendChild(li);
     });
-    if (!found) {
-      const li = document.createElement("li");
-      li.className = "offline";
-      li.textContent = "No other users found.";
-      userListEl.appendChild(li);
-    }
   });
 }
 
+/* open private chat only if friends */
 function openPrivateChat(otherUid, otherData) {
   selectedPrivateUid = otherUid;
   chattingWith.textContent = getFirstName(otherData.fullName || otherData.email);
@@ -214,6 +234,7 @@ function openPrivateChat(otherUid, otherData) {
   loadPrivateMessages(otherUid);
 }
 
+/* ---------- PRIVATE CHAT ---------- */
 privateSend.addEventListener("click", async () => {
   const text = privateInput.value.trim();
   if (!text || !selectedPrivateUid || !currentUser) return;
@@ -275,12 +296,40 @@ privateInput.addEventListener("input", async () => {
   await set(ref(db, `privateTyping/${chatId}/${currentUser.uid}`), val);
 });
 
-/* ---------- GROUPS ---------- */
-createGroupBtn.addEventListener("click", async () => {
-  if (!currentUser) return alert("Login first");
-  const name = newGroupNameInput.value.trim();
-  if (!name) return alert("Enter a group name");
-  try {
+/* ---------- GROUP CREATION MODAL ---------- */
+if (openCreateGroupBtn) {
+  openCreateGroupBtn.addEventListener("click", async () => {
+    groupModal.classList.remove("hidden");
+    friendsListEl.innerHTML = "";
+    const snap = await get(ref(db, `friends/${currentUser.uid}`));
+    if (snap.exists()) {
+      const friends = Object.keys(snap.val());
+      // get friend display names (optional)
+      for (const fid of friends) {
+        const uSnap = await get(ref(db, `users/${fid}`));
+        const display = uSnap.exists() ? (uSnap.val().fullName || uSnap.val().email) : fid;
+        const row = document.createElement("div");
+        row.className = "friend-row";
+        row.innerHTML = `<label style="display:flex; align-items:center; gap:8px"><input type="checkbox" value="${fid}"> <span>${getFirstName(display)}</span></label>`;
+        friendsListEl.appendChild(row);
+      }
+    } else {
+      friendsListEl.innerHTML = "<p>No friends to add.</p>";
+    }
+  });
+}
+
+if (groupCreateCancel) {
+  groupCreateCancel.addEventListener("click", () => {
+    groupModal.classList.add("hidden");
+  });
+}
+
+if (groupCreateConfirm) {
+  groupCreateConfirm.addEventListener("click", async () => {
+    const name = groupNameInput.value.trim();
+    if (!name) return alert("Enter a group name");
+
     const gRef = push(ref(db, "groupChats"));
     const gid = gRef.key;
 
@@ -292,16 +341,21 @@ createGroupBtn.addEventListener("click", async () => {
     updates[`userGroups/${currentUser.uid}/${gid}`] = true;
     updates[`groupsByCreator/${currentUser.uid}/${gid}`] = true;
 
+    const checkboxes = friendsListEl.querySelectorAll("input[type=checkbox]:checked");
+    checkboxes.forEach(cb => {
+      updates[`groupChats/${gid}/members/${cb.value}`] = true;
+      updates[`userGroups/${cb.value}/${gid}`] = true;
+    });
+
     await update(ref(db), updates);
 
-    newGroupNameInput.value = "";
+    groupModal.classList.add("hidden");
+    groupNameInput.value = "";
     loadUserGroups();
-  } catch (err) {
-    console.error(err);
-    alert("Could not create group");
-  }
-});
+  });
+}
 
+/* ---------- GROUPS ---------- */
 async function loadUserGroups() {
   if (!currentUser) return;
   groupListEl.innerHTML = "";
@@ -397,6 +451,7 @@ groupInput.addEventListener("input", async () => {
   await set(ref(db, `groupTyping/${selectedGroupId}/${currentUser.uid}`), v);
 });
 
+/* ---------- typing across groups ---------- */
 function listenGroupTyping() {
   onValue(ref(db, `groupTyping`), async (snap) => {
     const data = snap.val() || {};
@@ -421,4 +476,3 @@ function listenGroupTyping() {
 function getChatId(a,b){ return a < b ? `${a}_${b}` : `${b}_${a}`; }
 function getFirstName(s){ if(!s) return ""; if(s.includes("@")) return s.split("@")[0]; return s.split(" ")[0]; }
 function formatTime(ts){ if(!ts) return ""; const d = new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-
