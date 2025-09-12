@@ -8,27 +8,31 @@
     },
     "privateChats": {
       "$chatId": {
-        ".read": "auth != null && ($chatId.includes(auth.uid))",
-        ".write": "auth != null && ($chatId.includes(auth.uid))"
+        ".read": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))",
+        ".write": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))"
       }
     },
     "privateTyping": {
       "$chatId": {
-        ".read": "auth != null && ($chatId.includes(auth.uid))",
-        ".write": "auth != null && ($chatId.includes(auth.uid))"
+        ".read": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))",
+        ".write": "auth != null && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid))"
       }
     },
     "groupChats": {
       "$groupId": {
         ".read": "auth != null && data.child('members/' + auth.uid).val() === true",
         ".write": "auth != null && (newData.child('members/' + auth.uid).val() === true || data.child('members/' + auth.uid).val() === true)",
+
         "messages": {
           ".read": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true",
           ".write": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true"
         },
+
         "members": {
-          ".read": "auth != null && data.parent().child('members/' + auth.uid).val() === true",
-          ".write": "auth != null && data.parent().child('members/' + auth.uid).val() === true"
+          "$memberId": {
+            ".read": "auth != null && root.child('groupChats/' + $groupId + '/members/' + auth.uid).val() === true",
+            ".write": "auth != null && $memberId === auth.uid"
+          }
         }
       }
     },
