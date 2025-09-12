@@ -49,18 +49,18 @@
         <div id="groups-list-container" class="list-container hidden">
           <h4 class="sidebar-title">Your groups</h4>
           <ul id="group-list" class="list"></ul>
-          <button id="open-create-group" class="btn small primary">Create Group</button>
+          <button id="open-create-group" type="button">Create Group</button>
         </div>
         
         <!-- CREATE GROUP MODAL -->
-        <div id="group-modal" class="modal hidden">
+        <div id="group-modal" class="modal hidden" aria-hidden="true">
           <div class="modal-content">
-            <h3>Create New Group</h3>
-            <input id="modal-group-name" placeholder="Group name">
-            <div id="friends-list" class="list"></div>
+            <button id="create-group-cancel" class="modal-close" aria-label="Close">&times;</button>
+            <h2>Create Group</h2>
+            <input id="modal-group-name" type="text" placeholder="Group name" required />
+            <div id="friends-list"></div>
             <div class="modal-actions">
               <button id="create-group-confirm" class="btn primary">Create</button>
-              <button id="create-group-cancel" class="btn outline">Cancel</button>
             </div>
           </div>
         </div>
@@ -98,5 +98,3 @@
   <script type="module" src="app.js"></script>
 </body>
 </html>
-
-
